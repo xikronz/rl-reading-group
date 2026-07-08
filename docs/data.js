@@ -14,7 +14,7 @@
 const NEWS = [
   {
     date: "Jul 8, 2026",
-    text: "We're opening up this reading group to the RL community!! If you're interested in the algorithmic foundations of RL and want to go deeper than skimming abstracts come join us - all backgrounds welcome :)",
+    text: "We're opening up this reading group to the RL/ML community!! If you're interested in the algorithmic foundations of RL and want to go deeper than skimming abstracts come join us, all backgrounds welcome :)",
   },
   {
     date: "Jul 1, 2026",
