@@ -18,7 +18,7 @@ const NEWS = [
   },
   {
     date: "Jul 1, 2026",
-    text: "First meeting of the summer will be announced soon. Sign up for the mailing list here to get updates.",
+    text: "First meeting of the summer will be announced soon... Sign up for the mailing list here to get updates!!",
   },
 ];
 

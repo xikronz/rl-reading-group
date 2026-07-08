@@ -54,6 +54,7 @@ nav {
   padding: 20px 0;
   border-bottom: 1px solid var(--hairline);
   font-size: 14px;
+  line-height: 1;
 }
 
 nav .branding {
@@ -75,6 +76,7 @@ nav .brand-text {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
+  line-height: 1;
 }
 
 nav .links {
@@ -216,7 +218,7 @@ section h2 .muted {
   white-space: nowrap;
   color: var(--text-secondary);
   font-size: 13px;
-  width: 120px;
+  width: 100px;
   padding-right: 24px;
   padding-top: 18px;
 }
