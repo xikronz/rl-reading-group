@@ -13,18 +13,22 @@
 
 const NEWS = [
   {
+    date: "Jul 11, 2026",
+    text: "Seminars will be held weekly on Saturdays at 3:00 p.m. Can’t make it live? Recordings and materials will be released publicly every Sunday at 4:00 p.m. 😸",
+  },
+  {
     date: "Jul 8, 2026",
-    text: "We're opening up this reading group to the RL/ML community!! If you're interested in the algorithmic foundations of RL and want to go deeper than skimming abstracts come join us, all backgrounds welcome :)",
+    text: "We're opening up this reading group to the RL/ML community. If you're interested in the algorithmic foundations of RL and want to go deeper than skimming abstracts come join us, all backgrounds welcome :)",
   },
   {
     date: "Jul 3, 2026",
-    text: "Super excited to launch this, first meeting of the summer will be announced soon. 🎉 Sign up for our mailing list to get updates!!",
+    text: "Super excited to launch this, first meeting of the summer will be announced soon... Sign up for our mailing list to get updates",
   },
 ];
 
 const SCHEDULE = [
   {
-    date: "Jul XX, 2026",
+    date: "Jul 18, 2026",
     topic: "Foundations: Online learning, MaxEnt",
     paper: "Follow the Regularized Leader",
     paperUrl: "https://proceedings.mlr.press/v15/mcmahan11b/mcmahan11b.pdf",
