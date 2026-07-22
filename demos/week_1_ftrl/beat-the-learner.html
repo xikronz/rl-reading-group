@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beat the learner: an FTL vs FTRL game</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">An online learning game / you are the adversary</div>
+  <h1>Beat the learner. <em>One of them is easy.</em></h1>
+  <p class="premise">
+    Two algorithms split their bets between expert A and expert B.
+    <b style="color:var(--ftl)">FTL</b> goes all in on whichever expert has the lower total loss so far, and its choice is public.
+    <b style="color:var(--ftrl)">FTRL</b> plays softmax of the same totals, so it hedges.
+    Each round <b>you</b> choose where the loss lands. Your goal: run up their <b>regret</b>, meaning their loss minus the best single expert's loss.
+  </p>
+
+  <div class="roundline">
+    <span class="t">round <strong id="tOut">0</strong></span>
+    <span class="t" id="ftlPickOut">FTL has committed to A (tie-break), and everyone can see it.</span>
+  </div>
+
+  <div class="board">
+    <button class="expert" id="cardA" aria-label="Drop a loss on expert A">
+      <div class="flash" id="flashA"></div>
+      <span class="float" id="floatA1" style="top:20px;color:var(--ftl)"></span>
+      <span class="float" id="floatA2" style="top:44px;color:var(--ftrl)"></span>
+      <div class="glyph">A</div>
+      <div class="cum">total loss L<sub>A</sub> = <b id="laOut">0</b></div>
+      <div class="occupants">
+        <span class="chip ftl" id="ftlChipA">FTL, all in</span>
+        <span class="chip ftrl"><span id="ftrlShareA">50%</span>&nbsp;of FTRL</span>
+      </div>
+      <div class="strikelabel">
+        <svg class="bolt" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9.2h3.4L6 15l6.6-8.4H9.1L9.5 1z"/></svg>
+        Drop loss on A
+      </div>
+    </button>
+
+    <button class="expert" id="cardB" aria-label="Drop a loss on expert B">
+      <div class="flash" id="flashB"></div>
+      <span class="float" id="floatB1" style="top:20px;color:var(--ftl)"></span>
+      <span class="float" id="floatB2" style="top:44px;color:var(--ftrl)"></span>
+      <div class="glyph">B</div>
+      <div class="cum">total loss L<sub>B</sub> = <b id="lbOut">0</b></div>
+      <div class="occupants">
+        <span class="chip ftl" id="ftlChipB" style="display:none">FTL, all in</span>
+        <span class="chip ftrl"><span id="ftrlShareB">50%</span>&nbsp;of FTRL</span>
+      </div>
+      <div class="strikelabel">
+        <svg class="bolt" viewBox="0 0 16 16" aria-hidden="true"><path d="M9.5 1 3 9.2h3.4L6 15l6.6-8.4H9.1L9.5 1z"/></svg>
+        Drop loss on B
+      </div>
+    </button>
+  </div>
+
+  <div class="allocwrap">
+    <div class="alloclabel"><span>FTRL's allocation</span><span id="allocTxt">50% A / 50% B</span></div>
+    <div class="alloc" aria-hidden="true"><div class="a" id="allocA" style="width:50%"></div><div class="b"></div></div>
+  </div>
+
+  <div class="score">
+    <div class="stat"><div class="k">Best expert's loss</div><div class="v" id="bestOut">0.0</div></div>
+    <div class="stat"><div class="k">FTL regret</div><div class="v ftl" id="ftlRegOut">0.0</div></div>
+    <div class="stat"><div class="k">FTRL regret</div><div class="v ftrl" id="ftrlRegOut">0.0</div></div>
+    <div class="stat"><div class="k">Your hit rate on FTL</div><div class="v" id="hitOut">n/a</div></div>
+  </div>
+
+  <p class="commentary" id="commentOut">The learners have committed. FTL's position is public information. Do your worst.</p>
+
+  <div class="strip">
+    <div class="striplabel">The chase: FTL's pick vs your strike</div>
+    <div class="stripgrid" id="stripOut"></div>
+    <div class="striplegend"><span class="sw"></span> shaded = your loss landed exactly on FTL's pick. Watch it flip A, B, A, B. You are not predicting FTL, you are steering it.</div>
+  </div>
+
+  <div class="chartcard">
+    <div class="k">Cumulative regret</div>
+    <div class="legend">
+      <span><span class="sw" style="border-top:3px solid var(--ftl)"></span>FTL</span>
+      <span><span class="sw" style="border-top:3px dashed var(--ftrl)"></span>FTRL</span>
+      <span><span class="sw" style="border-top:2px dotted var(--ink-3)"></span>t/2, the linear-regret line</span>
+    </div>
+    <svg id="chart" viewBox="0 0 720 240" width="100%" role="img" aria-label="Cumulative regret by round for FTL and FTRL"></svg>
+  </div>
+
+  <div class="controls">
+    <button class="btn exploit" id="autoBtn">Auto-exploit x10</button>
+    <button class="btn" id="randBtn">Random losses x10</button>
+    <button class="btn" id="resetBtn">Reset</button>
+    <div class="etabox">
+      <label for="eta">FTRL temperature eta</label>
+      <input type="range" id="eta" min="0.05" max="2" step="0.05" value="0.3">
+      <span class="out" id="etaOut">0.30</span>
+    </div>
+  </div>
+
+  <div class="explain">
+    <h2>Why one is farmable and the other isn't</h2>
+    <p><b>FTL is exploitable because its argmin is a hard commitment.</b> It always stands entirely on yesterday's winner, so you collect 1.0 from it every round just by reading its position. Meanwhile your strikes alternate sides, the totals L<sub>A</sub> and L<sub>B</sub> stay within 1 of each other, and the best fixed expert only pays about half the rounds. So FTL's regret grows like t/2. Linear. That slope is the dotted line in the chart, and after ten rounds of auto-exploit your red curve is sitting on it.</p>
+    <p><b>FTRL is boring on purpose.</b> The entropy regularizer turns the hard argmin into a softmax, so near-tied totals mean a near-uniform split. There is no committed mass for you to punish. Whatever you strike, it pays roughly its probability on that expert, about 0.5, which is exactly what the benchmark pays. Nothing to farm.</p>
+    <p><b>Now raise eta and try again.</b> High temperature makes FTRL lean hard toward the current leader. It starts to resemble FTL, and its allocation bar begins whipping side to side under your strikes. That is the regret trade-off R(u)/eta + eta*sum||l||^2 made physical: responsiveness is exploitability. Also try the random-loss button on a fresh run. FTL is basically fine against noise. Its pathology needs an opponent who conditions on the commitment. Stability is not about surviving randomness; it is about not being predictable and all in at the same time.</p>
+    <details>
+      <summary>The math in one breath</summary>
+      <div class="math">
+        <div><span class="tag r">FTL</span> x<sub>t</sub> = argmin<sub>x in simplex</sub> &lt;L<sub>t-1</sub>, x&gt;, a vertex</div>
+        <div><span class="tag b">FTRL</span> x<sub>t</sub> = argmin<sub>x in simplex</sub> &lt;L<sub>t-1</sub>, x&gt; - H(x)/eta, proportional to exp(-eta*L<sub>t-1</sub>), a softmax</div>
+        <div><span class="tag g">Regret</span> sum<sub>t</sub> &lt;l<sub>t</sub>, x<sub>t</sub>&gt; - min<sub>i</sub> L<sub>T</sub>(i)</div>
+      </div>
+    </details>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  var hist = [];
+  var eta = 0.3;
+  var autoTimer = null;
+
+  function probB(la, lb) {
+    var m = Math.max(-eta * la, -eta * lb);
+    var wa = Math.exp(-eta * la - m), wb = Math.exp(-eta * lb - m);
+    return wb / (wa + wb);
+  }
+  function pickOf(la, lb) { return la <= lb ? 0 : 1; }
+
+  function compute() {
+    var la = 0, lb = 0, ftl = 0, ftrl = 0, hits = 0;
+    var rows = [], ftlSeries = [0], ftrlSeries = [0];
+    for (var i = 0; i < hist.length; i++) {
+      var pick = pickOf(la, lb);
+      var pB = probB(la, lb);
+      var hit = hist[i];
+      var ftlPay = hit === pick ? 1 : 0;
+      var ftrlPay = hit === 1 ? pB : 1 - pB;
+      ftl += ftlPay; ftrl += ftrlPay;
+      if (hit === pick) hits++;
+      if (hit === 0) la++; else lb++;
+      var best = Math.min(la, lb);
+      rows.push({ pick: pick, hit: hit, ftlPay: ftlPay, ftrlPay: ftrlPay });
+      ftlSeries.push(ftl - best);
+      ftrlSeries.push(ftrl - best);
+    }
+    return { la: la, lb: lb, ftl: ftl, ftrl: ftrl, hits: hits, rows: rows,
+             ftlSeries: ftlSeries, ftrlSeries: ftrlSeries,
+             best: Math.min(la, lb), pick: pickOf(la, lb), pB: probB(la, lb),
+             tie: la === lb };
+  }
+
+  function $(id) { return document.getElementById(id); }
+  function fmt(x, d) { return x.toFixed(d === undefined ? 1 : d); }
+
+  function comment(s) {
+    var t = hist.length;
+    if (t === 0) return "The learners have committed. FTL's position is public information. Do your worst.";
+    var last = s.rows[s.rows.length - 1];
+    if (last.hit !== last.pick) {
+      return "FTL dodged that one, and you just made its current pick look even safer. Hint: the argmin is public.";
+    }
+    if (t === 1) return "Direct hit. FTL paid the full 1.0; FTRL only paid the " + fmt(last.ftrlPay, 2) + " it had parked there. Now watch FTL flip.";
+    if (t < 5) return "FTL flipped to the other expert. It is chasing yesterday's winner. You know exactly where it stands. Again.";
+    if (t < 12) return "You are farming FTL for 1.0 a round while the best fixed expert pays about 0.5. That gap is regret, and it is growing linearly.";
+    if (s.ftlSeries[t] >= 0.45 * t) return "FTL's regret is riding the t/2 line, the textbook lower-bound construction, played by hand. FTRL still hasn't noticed you.";
+    return "Notice what you cannot do: no matter where you strike, FTRL pays about what the benchmark pays. There is nothing committed to punish.";
+  }
+
+  function renderStrip(rows) {
+    var start = Math.max(0, rows.length - 14);
+    var html = "";
+    for (var i = start; i < rows.length; i++) {
+      var r = rows[i];
+      html += '<div class="col">'
+        + '<div class="cell pick">' + (r.pick === 0 ? "A" : "B") + '</div>'
+        + '<div class="cell hitcell' + (r.hit === r.pick ? " landed" : "") + '">' + (r.hit === 0 ? "A" : "B") + '</div>'
+        + '</div>';
+    }
+    $("stripOut").innerHTML = html || '<div class="cell" style="width:auto;padding:0 10px;color:var(--ink-3);font-weight:500">no rounds yet</div>';
+  }
+
+  function renderChart(s) {
+    var t = hist.length;
+    var W = 720, H = 240, L = 44, R = 14, T = 14, B = 28;
+    var xmax = Math.max(20, Math.ceil(t / 10) * 10);
+    var ymaxData = Math.max.apply(null, s.ftlSeries.concat(s.ftrlSeries, [4]));
+    var ymax = Math.ceil(ymaxData + 1);
+    function X(x) { return L + (x / xmax) * (W - L - R); }
+    function Y(y) { return H - B - (y / ymax) * (H - T - B); }
+    function pts(series) {
+      var p = [];
+      for (var i = 0; i < series.length; i++) p.push(fmt(X(i), 1) + "," + fmt(Y(series[i]), 1));
+      return p.join(" ");
+    }
+    var g = "";
+    var ySteps = 4;
+    for (var k = 0; k <= ySteps; k++) {
+      var yv = (ymax / ySteps) * k;
+      g += '<line x1="' + L + '" y1="' + fmt(Y(yv),1) + '" x2="' + (W - R) + '" y2="' + fmt(Y(yv),1) + '" stroke="#EAECE8" stroke-width="1"/>';
+      g += '<text x="' + (L - 7) + '" y="' + fmt(Y(yv) + 4,1) + '" text-anchor="end">' + fmt(yv, yv % 1 ? 1 : 0) + '</text>';
+    }
+    for (var k2 = 0; k2 <= 4; k2++) {
+      var xv = Math.round((xmax / 4) * k2);
+      g += '<text x="' + fmt(X(xv),1) + '" y="' + (H - 8) + '" text-anchor="middle">' + xv + '</text>';
+    }
+    var refEndX = Math.min(xmax, 2 * ymax);
+    g += '<line x1="' + fmt(X(0),1) + '" y1="' + fmt(Y(0),1) + '" x2="' + fmt(X(refEndX),1) + '" y2="' + fmt(Y(refEndX / 2),1) + '" stroke="#8A9096" stroke-width="1.5" stroke-dasharray="2 5"/>';
+    g += '<line x1="' + L + '" y1="' + fmt(Y(0),1) + '" x2="' + (W - R) + '" y2="' + fmt(Y(0),1) + '" stroke="#B9BEB8" stroke-width="1"/>';
+    g += '<polyline fill="none" stroke="#2E5FA3" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round" points="' + pts(s.ftrlSeries) + '"/>';
+    g += '<polyline fill="none" stroke="#C6373C" stroke-width="2.5" stroke-linejoin="round" points="' + pts(s.ftlSeries) + '"/>';
+    $("chart").innerHTML = g;
+  }
+
+  function render(animateHit) {
+    var s = compute();
+    var t = hist.length;
+    $("tOut").textContent = t;
+    $("laOut").textContent = s.la;
+    $("lbOut").textContent = s.lb;
+    $("bestOut").textContent = fmt(s.best);
+    $("ftlRegOut").textContent = fmt(s.ftl - s.best);
+    $("ftrlRegOut").textContent = fmt(s.ftrl - s.best);
+    $("hitOut").textContent = t ? Math.round((s.hits / t) * 100) + "%" : "n/a";
+
+    var shareB = Math.round(s.pB * 100), shareA = 100 - shareB;
+    $("ftrlShareA").textContent = shareA + "%";
+    $("ftrlShareB").textContent = shareB + "%";
+    $("allocA").style.width = shareA + "%";
+    $("allocTxt").textContent = shareA + "% A / " + shareB + "% B";
+
+    var chipA = $("ftlChipA"), chipB = $("ftlChipB");
+    chipA.style.display = s.pick === 0 ? "" : "none";
+    chipB.style.display = s.pick === 1 ? "" : "none";
+    var activeChip = s.pick === 0 ? chipA : chipB;
+    activeChip.classList.remove("pop"); void activeChip.offsetWidth; activeChip.classList.add("pop");
+
+    $("ftlPickOut").textContent = "FTL has committed to " + (s.pick === 0 ? "A" : "B")
+      + (s.tie ? " (tie-break)" : " (lower total)") + ", and everyone can see it.";
+
+    $("commentOut").textContent = comment(s);
+    renderStrip(s.rows);
+    renderChart(s);
+
+    if (animateHit !== undefined && t > 0) {
+      var last = s.rows[s.rows.length - 1];
+      var side = animateHit === 0 ? "A" : "B";
+      var fl = $("flash" + side);
+      fl.classList.remove("on"); void fl.offsetWidth; fl.classList.add("on");
+      var f1 = $("float" + side + "1"), f2 = $("float" + side + "2");
+      f1.textContent = "FTL +" + fmt(last.ftlPay);
+      f2.textContent = "FTRL +" + fmt(last.ftrlPay, 2);
+      [f1, f2].forEach(function (el) { el.classList.remove("go"); void el.offsetWidth; el.classList.add("go"); });
+    }
+  }
+
+  function strike(e) {
+    if (autoTimer || hist.length >= 200) return;
+    hist.push(e);
+    render(e);
+  }
+
+  function runAuto(n, mode) {
+    if (autoTimer) return;
+    setAutoState(true);
+    var i = 0;
+    autoTimer = setInterval(function () {
+      if (i >= n || hist.length >= 200) { clearInterval(autoTimer); autoTimer = null; setAutoState(false); return; }
+      var s = compute();
+      var e = mode === "exploit" ? s.pick : (Math.random() < 0.5 ? 0 : 1);
+      hist.push(e);
+      render(e);
+      i++;
+    }, 330);
+  }
+  function setAutoState(on) {
+    ["cardA", "cardB", "autoBtn", "randBtn"].forEach(function (id) { $(id).disabled = on; });
+  }
+
+  $("cardA").addEventListener("click", function () { strike(0); });
+  $("cardB").addEventListener("click", function () { strike(1); });
+  $("autoBtn").addEventListener("click", function () { runAuto(10, "exploit"); });
+  $("randBtn").addEventListener("click", function () { runAuto(10, "random"); });
+  $("resetBtn").addEventListener("click", function () {
+    if (autoTimer) { clearInterval(autoTimer); autoTimer = null; setAutoState(false); }
+    hist = []; render();
+    $("commentOut").textContent = "The learners have committed. FTL's position is public information. Do your worst.";
+  });
+  $("eta").addEventListener("input", function (ev) {
+    eta = parseFloat(ev.target.value);
+    $("etaOut").textContent = fmt(eta, 2);
+    render();
+  });
+
+  document.addEventListener("keydown", function (ev) {
+    if (ev.key === "a" || ev.key === "A") strike(0);
+    if (ev.key === "b" || ev.key === "B") strike(1);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

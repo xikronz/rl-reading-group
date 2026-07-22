@@ -36,12 +36,22 @@ const SCHEDULE = [
     paperUrl: "https://proceedings.mlr.press/v15/mcmahan11b/mcmahan11b.pdf",
     presenter: "Carrie Chen",
     materials: {
-      names: ["MaxEnt ·", "CMU notes ·", "What is Entropy?"],
+      names: ["Slides ·", "MaxEnt ·", "CMU notes"],
       links: [
+        "slides/week_1_ftrl.pdf",
         "https://www.cs.princeton.edu/courses/archive/spr07/cos424/papers/maxent_icml.pdf",
         "https://www.cs.cmu.edu/~16831-f14/notes/F10/16831_lecture09_beckart/16831_lecture09_beckart.pdf",
-        "https://www.quantamagazine.org/what-is-entropy-a-measure-of-just-how-little-we-really-know-20241213/"
+
       ],
+    },
+  },
+  {
+    date: "Jul 25, 2026",
+    topic: "Foundations: MDPs, Inverse Learning",
+    paper: "TBD",
+    paperUrl: "TBD",
+    presenter: "TBD",
+    materials: {
     },
   },
 
