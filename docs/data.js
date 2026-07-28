@@ -47,11 +47,27 @@ const SCHEDULE = [
   },
   {
     date: "Jul 25, 2026",
-    topic: "Foundations: MDPs, Inverse Learning",
-    paper: "TBD",
-    paperUrl: "TBD",
-    presenter: "TBD",
+    topic: "Foundations: MDPs, Imitation Learning",
+    paper: "A Reduction of Imitation Learning to NGOL",
+    paperUrl: "https://arxiv.org/abs/1011.0686",
+    presenter: "Carrie Chen",
     materials: {
+      names: ["Slides ·", "Nan's Notes", "Invitation to Imitation", ],
+      links: [
+        "slides/week_2_dagger.pdf",
+        "https://nanjiang.cs.illinois.edu/files/cs542f22/note1.pdf",
+        "https://publications.ri.cmu.edu/storage/publications/pub_files/2015/3/InvitationToImitation_3_1415.pdf",
+      ],
+    },
+  },
+    {
+    date: "Aug 01, 2026",
+    topic: "Industry Guest Speaker #1: Together AI",
+    paper: "When RL Meets Adaptive Speculative Training",
+    paperUrl: "https://aurora-spec-ai.github.io/",
+    presenter: "ZhongZhu Zhou",
+    materials: {
+     
     },
   },
 
