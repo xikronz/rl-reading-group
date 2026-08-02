@@ -62,10 +62,22 @@ const SCHEDULE = [
   },
     {
     date: "Aug 01, 2026",
-    topic: "Industry Guest Speaker #1: Together AI",
+    topic: "RL in Industry #1: Together AI",
     paper: "When RL Meets Adaptive Speculative Training",
     paperUrl: "https://aurora-spec-ai.github.io/",
-    presenter: "ZhongZhu Zhou",
+    presenter: "Zhong Zhu Zhou",
+    materials: { names : ["Spec Dec  ·", "Async RL"], 
+      links: ["https://arxiv.org/pdf/2211.17192", "https://arxiv.org/pdf/1602.01783"]
+     
+    },
+  },    
+   
+  {
+    date: "Aug 08, 2026",
+    topic: "RL in Industry #2: Doordash AI",
+    paper: "Scaling is All You Need",
+    paperUrl: "https://arxiv.org/abs/2312.15122",
+    presenter: "Andreas Pasternak",
     materials: {
      
     },
