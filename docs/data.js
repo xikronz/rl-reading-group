@@ -65,9 +65,13 @@ const SCHEDULE = [
     topic: "RL in Industry #1: Together AI",
     paper: "When RL Meets Adaptive Speculative Training",
     paperUrl: "https://aurora-spec-ai.github.io/",
-    presenter: "Charlie Zhou",
-    materials: { names : ["Slides  ·","Spec Dec  ·", "Async RL ·", "FSDP"], 
-      links: ["x", "https://arxiv.org/pdf/2211.17192", "https://arxiv.org/pdf/1602.01783", "https://engineering.fb.com/2021/07/15/open-source/fsdp/"]
+    presenter: "Zhong Zhu Zhou",
+    materials: { 
+      names : ["Slides  ·","Spec Dec  ·", "Async RL ·", "FSDP"], 
+      links: ["x", 
+        "https://arxiv.org/pdf/2211.17192",
+        "https://arxiv.org/pdf/1602.01783", 
+        "https://engineering.fb.com/2021/07/15/open-source/fsdp/"]
      
     },
   },    
@@ -79,6 +83,10 @@ const SCHEDULE = [
     paperUrl: "https://arxiv.org/abs/2312.15122",
     presenter: "Andreas Pasternak",
     materials: {
+      names: ["Slides ·","Jax notes ·","Scaling RL for LLMs"],
+      links: ["x",
+        "https://johnwlambert.github.io/jax-tutorial/",
+        "https://arxiv.org/pdf/2510.13786"]
      
     },
   },
@@ -91,8 +99,20 @@ const SCHEDULE = [
     presenter: "Carrie Chen",
     materials: {
       names: ["TRPO ·", "DDPG ·", "Reinforce for LLMs"],
-      links: ["https://arxiv.org/pdf/1502.05477","https://arxiv.org/pdf/1509.02971", "https://arxiv.org/pdf/2402.03300"]
+      links: ["https://arxiv.org/pdf/1502.05477",
+        "https://arxiv.org/pdf/1509.02971", 
+        "https://arxiv.org/pdf/2402.03300"]
     },
+  },
+
+      {
+    date: "Aug 15, 2026",
+    topic: "RL in Industry #3: Patronus AI",
+    paper: "TBD",
+    paperUrl: "TBD",
+    presenter: "Darshan Deshpande",
+    materials: {
+     },
   },
 
 ];
