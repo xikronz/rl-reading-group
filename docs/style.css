@@ -233,9 +233,11 @@ section h2 .muted {
 }
 
 .schedule .presenter {
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
   font-size: 15px;
-  width: 130px;
+  width: 110px;
+  max-width: 110px;
 }
 
 .schedule .materials {

@@ -52,7 +52,7 @@ const SCHEDULE = [
     paperUrl: "https://arxiv.org/abs/1011.0686",
     presenter: "Carrie Chen",
     materials: {
-      names: ["Slides ·", "Nan's Notes", "Invitation to Imitation", ],
+      names: ["Slides ·", "Nan's Notes ·", "Invitation to Imitation", ],
       links: [
         "slides/week_2_dagger.pdf",
         "https://nanjiang.cs.illinois.edu/files/cs542f22/note1.pdf",
@@ -65,9 +65,9 @@ const SCHEDULE = [
     topic: "RL in Industry #1: Together AI",
     paper: "When RL Meets Adaptive Speculative Training",
     paperUrl: "https://aurora-spec-ai.github.io/",
-    presenter: "Zhong Zhu Zhou",
-    materials: { names : ["Spec Dec  ·", "Async RL"], 
-      links: ["https://arxiv.org/pdf/2211.17192", "https://arxiv.org/pdf/1602.01783"]
+    presenter: "Charlie Zhou",
+    materials: { names : ["Slides  ·","Spec Dec  ·", "Async RL ·", "FSDP"], 
+      links: ["x", "https://arxiv.org/pdf/2211.17192", "https://arxiv.org/pdf/1602.01783", "https://engineering.fb.com/2021/07/15/open-source/fsdp/"]
      
     },
   },    
@@ -80,6 +80,18 @@ const SCHEDULE = [
     presenter: "Andreas Pasternak",
     materials: {
      
+    },
+  },
+
+    {
+    date: "Aug 09, 2026",
+    topic: "A Taxonomy of Policy Gradients Methods",
+    paper: "Proximal Policy Optimization Algorithms",
+    paperUrl: "https://arxiv.org/pdf/1707.06347",
+    presenter: "Carrie Chen",
+    materials: {
+      names: ["TRPO ·", "DDPG ·", "Reinforce for LLMs"],
+      links: ["https://arxiv.org/pdf/1502.05477","https://arxiv.org/pdf/1509.02971", "https://arxiv.org/pdf/2402.03300"]
     },
   },
 
