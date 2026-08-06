@@ -260,6 +260,51 @@ section h2 .muted {
   color: var(--text-secondary);
 }
 
+/* ---------- Sponsors ---------- */
+
+section#sponsors {
+  margin-top: 48px;
+}
+
+.sponsor-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  margin-top: 24px;
+  overflow-x: auto;
+}
+
+.sponsor {
+  flex: 0 0 auto;
+  width: 180px;
+  height: 90px;
+  border: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--bg);
+}
+
+/* Pull each tile onto its neighbor so the shared edge is one hairline, not two */
+.sponsor + .sponsor {
+  margin-left: -1px;
+}
+
+.sponsor img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+a.sponsor:hover {
+  border-color: var(--text-secondary);
+  text-decoration: none;
+  /* lift above the neighbor so the whole outline is visible, not just 3 sides */
+  position: relative;
+  z-index: 1;
+}
+
 /* ---------- Syllabus page ---------- */
 
 .prose h2 {

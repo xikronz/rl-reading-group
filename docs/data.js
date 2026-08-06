@@ -11,19 +11,26 @@
  *    them like  "slides/2026-09-04-dqn.pdf".
  *  - Leave a field as null (or omit it) if you don't have it yet —
  *    the site renders "TBD" automatically.
+ *  - To add a sponsor: add an entry to SPONSORS. Drop the logo file
+ *    in  assets/sponsors/  and reference it like
+ *    "assets/sponsors/together.png". url is optional.
  * ============================================================ */
 
 const NEWS = [
+  {
+    date: "Aug 1, 2026",
+    text: "Cornell RLRS is officially partnering with Verda AI, whose A100 compute powers the research track of our seminar 🚀",
+  },
   {
     date: "Jul 11, 2026",
     text: "Seminars will be held weekly on Saturdays at 3:00 p.m. If you can't make it live, recordings and materials will be released publicly every Sunday at 4:00 p.m. 😸",
   },
   {
     date: "Jul 8, 2026",
-    text: "We're opening up this reading group to the RL/ML community. If you're interested in the algorithmic foundations of RL and want to go deeper than skimming abstracts come join us, all backgrounds welcome :)",
+    text: "We're opening up this reading group to the ML community. If you're interested in the algorithmic foundations of RL and want to go deeper than skimming abstracts come join us :)",
   },
   {
-    date: "Jul 3, 2026",
+    date: "Jul 1, 2026",
     text: "Super excited to launch this, first meeting of the summer will be announced soon... Sign up for our mailing list to get updates",
   },
 ];
@@ -115,4 +122,17 @@ const SCHEDULE = [
      },
   },
 
+];
+
+const SPONSORS = [
+  {
+    name: "Verda AI",
+    logo: "assets/sponsors/verda.png",
+    url: "https://verda.com/",
+  },
+  {
+    name: "Benchflow",
+    logo: "assets/sponsors/benchflow.png",
+    url: "http://benchflow.ai/",
+  },
 ];

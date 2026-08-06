@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cornell RL Reading Group</title>
+  <title>Cornell RL Research Seminar</title>
   <meta name="description" content="Cornell's reinforcement learning and interactive learning paper reading group.">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -22,7 +22,7 @@
     </nav>
 
     <header>
-      <h1>Cornell RL Reading Group</h1>
+      <h1>Cornell RL Research Seminar</h1>
       <div class="course-info">  Saturdays @ 3:00 p.m. EST · <a href="https://join.slack.com/t/cornellrlseminar/shared_invite/zt-43x9ef8m9-VK3b_cf0WqOkXGeENpzQWA">Slack</a> · <a href="meet.google.com/dtp-zgex-nug">Meeting Link</a> · <a href="https://drive.google.com/file/d/1GivtOr4hX9_ivouKNjSnf4zKyo-Ss7Rw/view?usp=sharing">Meeting Recordings</a> 
     </header>
 
@@ -59,6 +59,11 @@
         </thead>
         <tbody id="schedule-body"></tbody>
       </table>
+    </section>
+
+    <section id="sponsors">
+      <h2>Industry Partners ❤️</h2>
+      <div class="sponsor-row" id="sponsor-row"></div>
     </section>
 
     <footer>
@@ -139,6 +144,21 @@
       tr.appendChild(materials);
 
       body.appendChild(tr);
+    });
+
+    // Sponsors
+    const sponsorRow = document.getElementById("sponsor-row");
+    SPONSORS.forEach(function (sponsor) {
+      const img = el("img");
+      img.src = sponsor.logo;
+      img.alt = sponsor.name;
+
+      const tile = sponsor.url ? link(sponsor.url, null, true) : el("div");
+      tile.className = "sponsor";
+      tile.title = sponsor.name;
+      tile.appendChild(img);
+
+      sponsorRow.appendChild(tile);
     });
   </script>
 </body>
