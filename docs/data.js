@@ -91,7 +91,7 @@ const SCHEDULE = [
     presenter: "Andreas Pasternak",
     materials: {
       names: ["Slides ·","Jax notes ·","Scaling RL for LLMs"],
-      links: ["x",
+      links: ["docs/slides/week_4_doordash.pdf",
         "https://johnwlambert.github.io/jax-tutorial/",
         "https://arxiv.org/pdf/2510.13786"]
      
@@ -105,19 +105,29 @@ const SCHEDULE = [
     paperUrl: "https://arxiv.org/pdf/1707.06347",
     presenter: "Carrie Chen",
     materials: {
-      names: ["TRPO ·", "DDPG ·", "Reinforce for LLMs"],
-      links: ["https://arxiv.org/pdf/1502.05477",
-        "https://arxiv.org/pdf/1509.02971", 
+      names: ["Slides ·", "Demo ·", "Reinforce for LLMs"],
+      links: ["docs/slides/week_4.5_pg.pdf",
+        "https://github.com/xikronz/rl-reading-group/tree/main/demos/week_4.5_pg", 
         "https://arxiv.org/pdf/2402.03300"]
     },
   },
 
-      {
+    {
     date: "Aug 15, 2026",
     topic: "RL in Industry #3: Patronus AI",
     paper: "TBD",
     paperUrl: "TBD",
     presenter: "Darshan Deshpande",
+    materials: {
+     },
+  },
+
+      {
+    date: "Aug 15, 2026",
+    topic: "RL in Industry #4: Applied Compute",
+    paper: "Predicting and Controlling Staleness in Async RL",
+    paperUrl: "https://www.appliedcompute.com/research/staleness-in-fully-async-rl",
+    presenter: "Chengyu Dong",
     materials: {
      },
   },

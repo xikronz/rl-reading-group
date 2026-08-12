@@ -1,0 +1,1457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>One estimator, eighteen acronyms: a field guide to policy gradient methods</title>
+<meta name="description" content="An interactive taxonomy of policy gradient methods for LLMs. Click any piece of the objective to see which failure mode it patches.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">RLRS week 4 / Policy Gradients</div>
+  <h1>Eighteen acronyms. <em>One estimator.</em></h1>
+  <p class="premise">
+    The recent explosion of <b>*PO</b> methods is not eighteen unrelated algorithms. Almost every one of them is
+    a patch to a small number of failure modes in the same estimator, the one descended from REINFORCE.
+    This page pins each method to <b>the exact symbol it changes</b>. Build a method from four decisions or
+    pick a node below, then click any coloured piece of its objective to see what it is for and why someone rewrote it.
+  </p>
+
+  <div class="seed">
+    <div class="cap">REINFORCE</div>
+    <div class="line eq" id="seedEq"></div>
+    <div class="after">
+      For outcome-reward reasoning, <b>R(y) is one bit</b> and the sum runs over every token in the response which means every token inherits the same credit signal.
+      Three factors, and <b>nothing bounding how far the update may carry the policy</b>: that missing fourth term is what the right half of the tree is about.
+    </div>
+  </div>
+
+  <div class="knobs" id="knobs" aria-label="The three factors in the REINFORCE gradient"></div>
+
+  <div class="sechead" id="canvas">
+    <h2>Build a policy-gradient method</h2>
+    <span class="hint">pick one choice in each row. any combination is allowed</span>
+  </div>
+
+  <p class="builder-intro">
+    Every named recipe keeps REINFORCE's score-function direction; A*-PO is the one exception (offline A* credit signal)
+  </p>
+  <div class="axis-guide" id="axisGuide"></div>
+
+  <div class="builder-shell">
+    <div class="sr-only" id="buildAnnouncement" role="status" aria-live="polite" aria-atomic="true"></div>
+    <form class="method-builder" id="builder"></form>
+  </div>
+
+  <div class="canvas" id="methodCanvas">
+    <div class="chead">
+      <div class="chead-main">
+        <div class="nm" id="mName"></div>
+        <div class="full" id="mFull"></div>
+      </div>
+      <div class="chead-side">
+        <div class="chgstrip" id="mChg"></div>
+        <div class="ptoggle" id="parentToggle" hidden>
+          <span class="ptoggle-label" id="ghostLabel">show parent</span>
+          <button class="switch" id="ghostBtn" role="switch" aria-checked="true" aria-labelledby="ghostLabel"></button>
+        </div>
+      </div>
+    </div>
+    <div class="cbody" id="cbody">
+      <div class="eqrow ghost" id="rowGhost"></div>
+      <div class="eqrow"><div class="side" id="objSide">objective</div><div class="eq" id="rowObj"></div></div>
+      <div class="eqrow"><div class="side" id="gradSide">what one token actually receives</div><div class="eq small" id="rowGrad"></div></div>
+      <div class="eqrow" id="rowDefWrap"><div class="eq small" id="rowDef"></div></div>
+    </div>
+    <div class="outer" id="outer"></div>
+    <div class="panel" id="panel"></div>
+    <div class="cnav">
+      <span class="sp"></span>
+      <span class="kbd" id="permalink"></span>
+    </div>
+  </div>
+
+  <div class="sechead">
+    <h2>How they relate</h2>
+    <span class="hint">click a node or an arrow to follow the genealogy.</span>
+  </div>
+
+  <div class="viewcard" id="viewGraph">
+    <div class="graphscroll" id="graphScroll"></div>
+    <div class="relstrip">
+      <div class="t" id="relTitle">relations</div>
+      <div id="relList"></div>
+    </div>
+  </div>
+
+  <div class="coda">
+    <h2>The flaw everything inherits</h2>
+    <p>
+      Strip the LLM case down and REINFORCE says: I know the answer was good, therefore every sampled decision
+      along the way deserves credit. That is the assumption under attack from every direction at once.
+      <b>STAPO</b> says some rare tokens are actively harmful. <b>ASPO</b> says tokens should not share directional
+      dynamics merely because they share an outcome. <b>GiGPO</b> says steps need local credit. <b>DAPO</b> says
+      long traces should not evaporate through response level normalization.
+    </p>
+    <p>
+      One caution on reading the graph. The arrows are conceptual lineage, not chronology or citation.
+      <b>GRPO and RLOO are partly a return toward REINFORCE</b>, not machinery added on top of PPO, and
+      <b>VAPO</b> is a live argument that deleting the critic was the wrong lesson to draw. Two of the boxes
+      are called DAPO by different groups in different years. Treat the tree as a map of disagreements.
+    </p>
+  </div>
+
+  <p class="foot">
+    Every claim here is sourced to the primary paper, linked from each method's header. Built for the
+    Cornell RL reading group. Sibling demo: <a href="../week_1_ftrl/beat-the-learner.html">Beat the learner (FTL vs FTRL)</a>.
+  </p>
+
+</div>
+
+<script>
+(function () {
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ *  KNOBS. The legend reads the REINFORCE line above it factor by factor,
+ *  so it renders only the three that actually appear in that line. w is
+ *  the slot TRPO adds later and has no term here. All four stay in the
+ *  map: nm labels the "edits X at" tags, and blurb is the panel's
+ *  last-resort text for a method with no note in that slot.
+ *  Each has its own underline style so the encoding never rests on colour.
+ * ------------------------------------------------------------------ */
+var KNOB_LEGEND = ["adv", "sel", "score"];
+var KNOBS = {
+  adv: {
+    sym: "R(y)", nm: "credit / baseline",
+    blurb: "The scalar out front. Here it is one bit, right or wrong, and it sits outside the sum, so every t in the response is multiplied by the same number. Nothing in this line can say which token earned it."
+  },
+  w: {
+    sym: "wₜ", nm: "trust region / IS weight",
+    blurb: "How far the policy may move from the one that produced the samples, and how off policy samples are reweighted."
+  },
+  sel: {
+    sym: "∑<sub>t</sub>", nm: "selection & aggregation",
+    blurb: "Runs t = 1 to |y|: every sampled token, no divisor and no mask. A 20k token trace contributes forty times the terms of a 500 token one, and all of them count."
+  },
+  score: {
+    sym: "∇ log π", nm: "the score function",
+    blurb: "The only factor that depends on θ, so the only one actually being differentiated. It raises the probability of the token that was sampled; R(y) decides the sign and size of the push. Almost nothing in the tree touches it."
+  }
+};
+
+/* small token constructors */
+function P(h) { return { h: h }; }                                  /* plain  */
+function A(h, c) { return { k: "adv", h: h, c: c }; }
+function W(h, c) { return { k: "w", h: h, c: c }; }
+function S(h, f, c) { return { k: "sel", h: h, f: f, c: c }; }
+function G(h, c) { return { k: "score", h: h, c: c }; }
+function I(h) { return { k: "w", h: h, inert: 1 }; }                 /* inert slot */
+
+var PI = "π", TH = "θ", RHO = "ρ", EPS = "ε", LAM = "λ",
+    DEL = "δ", SIG = "σ", OM = "ω", BET = "β", GAM = "γ",
+    TAU = "τ", SUM = "∑", NAB = "∇", EE = "𝔼",
+    DOT = "⋅", HA = "Â", LE = "≤", NE = "≠", PM = "±",
+    KLB = "‖", STAR = "★", IN = "∈", MIN = "−";
+
+function frac(a, b) { return "<span class='fr'><span>" + a + "</span><span>" + b + "</span></span>"; }
+var RATIO = frac(PI + "<sub>" + TH + "</sub>(a<sub>t</sub>|s<sub>t</sub>)", PI + "<sub>old</sub>(a<sub>t</sub>|s<sub>t</sub>)");
+var LOGPI = "log " + PI + "<sub>" + TH + "</sub>(a<sub>t</sub>|s<sub>t</sub>)";
+var GLOGPI = NAB + "<sub>" + TH + "</sub> " + LOGPI;
+var GLOGY = NAB + "<sub>" + TH + "</sub> log " + PI + "<sub>" + TH + "</sub>(y<sub>t</sub>|x, y<sub>&lt;t</sub>)";
+
+/* ------------------------------------------------------------------ *
+ *  THE METHODS
+ * ------------------------------------------------------------------ */
+var METHODS = [
+
+/* ---------------------------------------------------------------- 1 */
+{ id: "reinforce", nm: "REINFORCE", yr: 1992, k: "score", gx: 620, gy: 60,
+  full: "Simple statistical gradient-following algorithms for connectionist reinforcement learning, Williams",
+  url: "https://incompleteideas.net/papers/williams-92.pdf",
+  parents: [],
+  changed: [],
+  fix: "The root. Increase the probability of actions that appeared in trajectories with high reinforcement, decrease it for the rest. Everything below is an argument about one of the four factors in this line.",
+  obj: [P("L(" + TH + ") ="), S(EE + "<sub>" + TAU + "∼" + PI + "<sub>" + TH + "</sub></sub>", "samples"), P("["),
+        S(SUM + "<sub>t=1</sub><sup>T</sup>", "agg"), A("G<sub>t</sub>"), G(LOGPI), P("]")],
+  grad: [P("g ="), S(EE, "samples"), P("["), S(SUM + "<sub>t</sub>", "agg"), I("1"), P(DOT),
+         A("G<sub>t</sub>"), P(DOT), G(GLOGPI), P("]")],
+  outer: { samples: "one fresh on-policy batch", reuse: "one gradient step per batch" },
+  n: {
+    adv: "G<sub>t</sub> = " + SUM + "<sub>k" + GE() + "t</sub> r<sub>k</sub>, the sampled return. Unbiased, but its variance grows with the horizon, and every action in a lucky trajectory receives the same G<sub>t</sub>. Credit and luck are indistinguishable here.",
+    w: "w<sub>t</sub> = 1. Legitimate, because the batch was drawn from " + PI + "<sub>" + TH + "</sub> itself. But nothing bounds the step, so one update later the samples describe a policy you no longer have.",
+    sel: "Bare " + SUM + "<sub>t</sub>, no divisor. A length-T trajectory contributes T terms, so total gradient scales with length by construction.",
+    sel_samples: "One fresh on-policy batch. Every trajectory contributes, no filtering.",
+    sel_reuse: "One step, then discard. A second step would be off-policy with nothing to correct it.",
+    score: "From " + NAB + PI + " = " + PI + NAB + " log " + PI + ": it converts " + NAB + "<sub>" + TH + "</sub>" + EE + "<sub>" + PI + "</sub>[f] into something you can estimate from samples. Everything below inherits it."
+  },
+  mx: { adv: "G<sub>t</sub>, raw return", w: "none", samples: "one on-policy batch", agg: "plain sum over t", reuse: "1 step", score: NAB + " log " + PI }
+},
+
+/* ---------------------------------------------------------------- 2 */
+{ id: "ac_gae", nm: "Actor-Critic + GAE", yr: 2015, k: "adv", gx: 620, gy: 160,
+  full: "High-Dimensional Continuous Control Using Generalized Advantage Estimation, Schulman et al.",
+  url: "https://arxiv.org/abs/1506.02438",
+  parents: [{ id: "reinforce", k: "adv", why: "the credit signal is too noisy to learn from" }],
+  changed: ["adv"],
+  fix: "Subtract a learned baseline, then interpolate between short horizon and long horizon estimates. Same expected gradient, far less variance, one extra model to fit.",
+  obj: [P("L(" + TH + ") ="), S(EE, "samples"), P("["), S(SUM + "<sub>t</sub>", "agg"),
+        A(HA + "<sub>t</sub><sup>GAE</sup>", 1), G(LOGPI), P("]")],
+  grad: [P("g ="), S(EE, "samples"), P("["), S(SUM + "<sub>t</sub>", "agg"), I("1"), P(DOT),
+         A(HA + "<sub>t</sub><sup>GAE</sup>", 1), P(DOT), G(GLOGPI), P("]")],
+  def: [A("&nbsp;" + HA + "<sub>t</sub><sup>GAE</sup> = " + SUM + "<sub>l" + GE() + "0</sub> (" + GAM + LAM + ")<sup>l</sup> " + DEL + "<sub>t+l</sub>,"),
+        P("&nbsp;&nbsp;"), A(DEL + "<sub>t</sub> = r<sub>t</sub> + " + GAM + "V<sub>φ</sub>(s<sub>t+1</sub>) " + MIN + " V<sub>φ</sub>(s<sub>t</sub>)")],
+  outer: { samples: "one fresh on-policy batch", reuse: "one gradient step per batch" },
+  n: {
+    adv: "Two edits. Subtract a baseline, G<sub>t</sub> → G<sub>t</sub> " + MIN + " V<sub>φ</sub>(s<sub>t</sub>): free in expectation because " + EE + "<sub>a∼" + PI + "</sub>[" + NAB + " log " + PI + "(a|s)] = 0, so the mean survives and the variance drops. Then interpolate with " + LAM + ": " + LAM + " = 0 is one-step TD (biased, low variance), " + LAM + " = 1 is Monte Carlo (unbiased, high variance). Cost: a second network fit alongside " + PI + "<sub>" + TH + "</sub>.",
+    w: "Still 1. Better direction, still no bound on how far you travel along it.",
+    sel: "Unchanged from REINFORCE.",
+    score: "Unchanged. It never changes."
+  },
+  mx: { adv: "G<sub>t</sub> " + MIN + " V<sub>φ</sub>, then GAE(" + LAM + ")" }
+},
+
+/* ---------------------------------------------------------------- 3 */
+{ id: "trpo", nm: "TRPO", yr: 2015, k: "w", gx: 620, gy: 258,
+  full: "Trust Region Policy Optimization, Schulman et al.",
+  url: "https://arxiv.org/abs/1502.05477",
+  parents: [{ id: "ac_gae", k: "w", why: "a correct gradient direction does not imply a safe step" }],
+  changed: ["w", "sel"],
+  fix: "The policy gradient objective is a local surrogate for return. Move too far and the state distribution shifts enough that the surrogate stops predicting anything. So bound the move in distribution space.",
+  obj: [P("max<sub>" + TH + "</sub>"), S(EE + "<sub>t</sub>", "agg"), P("["), W(RHO + "<sub>t</sub>", 1),
+        A(HA + "<sub>t</sub>"), P("]"), P("&nbsp;&nbsp;subject to&nbsp;&nbsp;"),
+        W(EE + "<sub>s</sub>[ D<sub>KL</sub>(" + PI + "<sub>old</sub>(" + DOT + "|s) " + KLB + " " + PI + "<sub>" + TH + "</sub>(" + DOT + "|s)) ] " + LE + " " + DEL, 1)],
+  grad: [P("g ="), S(EE + "<sub>t</sub>", "agg"), P("["), W(RHO + "<sub>t</sub>", 1), P(DOT),
+         A(HA + "<sub>t</sub>"), P(DOT), G(GLOGPI), P("]"), P("&nbsp;&nbsp;solved inside the KL ball")],
+  def: [W("&nbsp;" + RHO + "<sub>t</sub> = " + RATIO)],
+  outer: { samples: "one fresh on-policy batch", reuse: "one constrained solve per batch" },
+  n: {
+    adv: "Untouched. TRPO changes step geometry, not the estimator, and the two stay independent for the rest of the tree.",
+    w: "" + RHO + "<sub>t</sub> = " + PI + "<sub>" + TH + "</sub>/" + PI + "<sub>old</sub> corrects for sampling under the old policy. The constraint is the contribution: " + EE + "<sub>s</sub>[D<sub>KL</sub>] " + LE + " " + DEL + ". It is stated in distribution space, not parameter space, because what invalidates the surrogate is a shift in which states get visited, not a large ‖Δ" + TH + "‖.",
+    sel: "Same batch, different thing done to it.",
+    sel_reuse: "One constrained solve: conjugate gradient for the natural-gradient direction, then backtracking until the KL bound actually holds. Correct, and expensive enough that PPO exists.",
+    score: "Unchanged."
+  },
+  mx: { w: "hard KL ball, " + LE + " " + DEL, reuse: "one constrained solve" }
+},
+
+/* ---------------------------------------------------------------- 4 */
+{ id: "ppo", nm: "PPO", yr: 2017, k: "w", gx: 620, gy: 358,
+  full: "Proximal Policy Optimization Algorithms, Schulman et al.",
+  url: "https://arxiv.org/abs/1707.06347",
+  parents: [{ id: "trpo", k: "w", why: "the constrained solve is too cumbersome to iterate on" }],
+  changed: ["w", "sel"],
+  fix: "Push the trust region inside the loss so plain SGD approximately respects it. The accumulation point of the classical line, and the thing every LLM paper below is arguing with.",
+  obj: [P("L<sub>PPO</sub> ="), S(EE + "<sub>t</sub>", "agg"), P("[ min("), W(RHO + "<sub>t</sub>"),
+        A(HA + "<sub>t</sub>"), P(", "), W("clip(" + RHO + "<sub>t</sub>, 1" + MIN + EPS + ", 1+" + EPS + ")", 1),
+        A(HA + "<sub>t</sub>"), P(") ]")],
+  grad: [P("g ="), S(EE + "<sub>t</sub>", "agg"), P("["), W("1[ unclipped ]", 1), P(DOT), W(RHO + "<sub>t</sub>"),
+         P(DOT), A(HA + "<sub>t</sub>"), P(DOT), G(GLOGPI), P("]")],
+  outer: { samples: "one batch of rollouts", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "GAE against a learned V<sub>φ</sub>, unchanged. At LLM scale V<sub>φ</sub> is a second network of comparable size, which is the fact the critic-free branch reacts to.",
+    w: "min(" + RHO + HA + ", clip(" + RHO + ", 1" + PM + EPS + ")" + HA + ") removes any gain from pushing " + RHO + "<sub>t</sub> past 1 " + PM + " " + EPS + ", so plain SGD approximately respects the region TRPO solved for. The cost is on the second line: when the clipped branch wins, the term is constant in " + TH + " and ∂/∂" + TH + " = <b>0 exactly</b>. Not damped, off. CISPO, GSPO and SAPO all answer that indicator.",
+    sel: "Mean over tokens in the batch. Harmless while trajectories are short.",
+    sel_reuse: "Clipping bounds drift from " + PI + "<sub>old</sub>, so one batch survives K minibatch epochs instead of one step. This is the explicit motivation for PPO.",
+    score: "Unchanged where the clip does not fire, and identically zero where it does."
+  },
+  mx: { w: "clip " + RHO + " to 1 " + PM + " " + EPS, reuse: "K minibatch epochs" }
+},
+
+/* ---------------------------------------------------------------- 5 */
+{ id: "rloo", nm: "RLOO", yr: 2024, k: "adv", gx: 395, gy: 468,
+  full: "Back to Basics: Revisiting REINFORCE-Style Optimization for Learning from Human Feedback in LLMs, Ahmadian et al., ACL",
+  url: "https://aclanthology.org/2024.acl-long.662/",
+  parents: [{ id: "ppo", k: "adv", why: "for RLHF, the critic may not earn its complexity" }],
+  changed: ["adv", "w", "sel"],
+  fix: "Not a descendant that adds machinery to PPO. A partial return to REINFORCE, arguing that several ingredients PPO inherited from continuous control do not buy enough in RLHF to justify themselves.",
+  obj: [P("L(" + TH + ") ="), S(EE + "<sub>x</sub>", "samples"), P("["), S(frac("1", "G") + SUM + "<sub>i=1</sub><sup>G</sup>", "agg"),
+        A(HA + "<sub>i</sub>", 1), G("log " + PI + "<sub>" + TH + "</sub>(y<sub>i</sub>|x)"), P("]")],
+  grad: [P("g ="), S(SUM + "<sub>i</sub>", "agg"), I("1"), P(DOT), A(HA + "<sub>i</sub>", 1), P(DOT),
+         G(SUM + "<sub>t</sub> " + GLOGY)],
+  def: [A("&nbsp;" + HA + "<sub>i</sub> = R<sub>i</sub> " + MIN + " " + frac("1", "G" + MIN + "1") + SUM + "<sub>j" + NE + "i</sub> R<sub>j</sub>", 1)],
+  outer: { samples: "G completions per prompt", reuse: "one step per batch, on-policy" },
+  n: {
+    adv: "" + HA + "<sub>i</sub> = R<sub>i</sub> " + MIN + " mean<sub>j" + NE + "i</sub> R<sub>j</sub>. Excluding i from its own baseline is what keeps it unbiased: include i and the baseline correlates with the sample it is subtracted from. No learned model anywhere.",
+    w: "w = 1. Samples are on-policy, so there is nothing to correct. The claim is that PPO's clipping solves a problem RLHF does not have.",
+    sel: "The response is the unit: " + SUM + "<sub>t</sub> " + NAB + " log " + PI + " carries one shared " + HA + "<sub>i</sub>.",
+    sel_samples: "G completions per prompt. Critic parameters become rollout FLOPs, the trade that defines this branch.",
+    sel_reuse: "One step. No ratio, so no license to take a second.",
+    score: "Unchanged, summed over the response under a single coefficient."
+  },
+  mx: { adv: "leave-one-out mean", w: "none", samples: "G per prompt", agg: "per response" }
+},
+
+/* ---------------------------------------------------------------- 6 */
+{ id: "grpo", nm: "GRPO", yr: 2024, k: "adv", gx: 620, gy: 468,
+  full: "DeepSeekMath: Pushing the Limits of Mathematical Reasoning in Open Language Models, Shao et al.",
+  url: "https://arxiv.org/abs/2402.03300",
+  parents: [
+    { id: "ppo", k: "adv", why: "a critic at model scale is not a cheap implementation detail" },
+    { id: "rloo", k: "adv", why: "the same move, standardized instead of leave-one-out", dash: 1 }
+  ],
+  changed: ["adv", "sel"],
+  fix: "Delete the critic and build the baseline out of the group itself. The hub of the modern tree: nine of the methods below are edits to this line.",
+  obj: [P("L ="), S(frac("1", "G") + SUM + "<sub>i</sub>", "agg"), S(frac("1", "|y<sub>i</sub>|") + SUM + "<sub>t</sub>", "agg"),
+        P("min("), W(RHO + "<sub>it</sub>"), A(HA + "<sub>i</sub>", 1), P(", "),
+        W("clip(" + RHO + "<sub>it</sub>, 1" + PM + EPS + ")"), A(HA + "<sub>i</sub>", 1), P(")")],
+  grad: [P("g ="), S(SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg"), W(RHO + "<sub>it</sub>"), P(DOT),
+         A(HA + "<sub>i</sub>", 1), P(DOT), G(GLOGY),
+         P("&nbsp;&nbsp; every token of response i shares one " + HA + "<sub>i</sub>")],
+  def: [A("&nbsp;" + HA + "<sub>i</sub> = " + frac("R<sub>i</sub> " + MIN + " mean(R<sub>1</sub> " + DOT + DOT + DOT + " R<sub>G</sub>)", "std(R<sub>1</sub> " + DOT + DOT + DOT + " R<sub>G</sub>)"), 1)],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "" + HA + "<sub>i</sub> = (R<sub>i</sub> " + MIN + " mean R)/std R over the G responses to one prompt. The group is the baseline, so V<sub>φ</sub> is gone. Note the limit: " + HA + "<sub>i</sub> is constant in t, so nothing here says which token earned it.",
+    w: "PPO's per-token clip, unchanged, now multiplying a per-response " + HA + "<sub>i</sub>. Ask why the ratio is per token when the advantage is per sequence and you have derived GSPO, CISPO and ASPO.",
+    sel: "Two divisors: 1/G across responses, 1/|y<sub>i</sub>| inside each. Dr. GRPO and DAPO both exist to argue neither is neutral.",
+    sel_samples: "G generations per prompt. No critic, G× the inference.",
+    sel_reuse: "Inherited from PPO. The ratio is what makes it legal.",
+    score: "Unchanged."
+  },
+  mx: { adv: "group standardized R", samples: "G per prompt", agg: "1/G and 1/|y<sub>i</sub>|" }
+},
+
+/* ---------------------------------------------------------------- 7 */
+{ id: "vapo", nm: "VAPO", yr: 2025, k: "adv", gx: 885, gy: 468,
+  full: "VAPO: Efficient and Reliable Reinforcement Learning for Advanced Reasoning Tasks, Yue et al.",
+  url: "https://arxiv.org/abs/2504.05118",
+  parents: [
+    { id: "ppo", k: "adv", why: "the critic was not the problem, the way it was fit was" },
+    { id: "dapo", k: "sel", why: "keeps clip-higher and the token level loss", dash: 1 }
+  ],
+  changed: ["adv", "w", "sel"],
+  fix: "The dissent. Everything else on this row concluded that critics are expensive so delete them. VAPO argues that value based RL works better once you fix why the critic behaved badly on long reasoning.",
+  obj: [P("L<sub>PPO</sub> with"), A(HA + "<sub>t</sub><sup>GAE</sup>(" + LAM + "(|y|))", 1),
+        P(", "), W("clip(" + RHO + "<sub>t</sub>, 1" + MIN + EPS + "<sub>low</sub>, 1+" + EPS + "<sub>high</sub>)"),
+        P(", "), S("token level aggregation", "agg")],
+  grad: [P("g ="), S(frac("1", SUM + "<sub>i</sub>|y<sub>i</sub>|") + SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg"),
+         W(RHO + "<sub>it</sub>"), P(DOT), A(HA + "<sub>t</sub><sup>GAE</sup>", 1), P(DOT), G(GLOGY)],
+  def: [A("&nbsp;" + LAM + " chosen as a function of response length, so short answers and 20k token traces are not forced onto one bias-variance tradeoff", 1)],
+  outer: { samples: "group sampling, plus self-imitation", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Keeps V<sub>φ</sub> and fixes how it is fit. The headline is length-adaptive GAE: " + LAM + " = " + LAM + "(|y|), so a 500-token answer and a 20k-token trace sit at different bias-variance points instead of sharing one " + LAM + ". Value pretraining and decoupled GAE come with it. The contested claim is the diagnosis: the critic misbehaves on long traces, which does not imply value-based RL is wrong for the problem.",
+    w: "DAPO's decoupled bounds, " + EPS + "<sub>low</sub> " + NE + " " + EPS + "<sub>high</sub>.",
+    sel: "DAPO's denominator: 1/" + SUM + "<sub>i</sub>|y<sub>i</sub>| over the batch, not per response.",
+    sel_samples: "Group sampling on top of the critic, plus self-imitation on successful traces. Deliberately not a purist position.",
+    score: "Unchanged."
+  },
+  mx: { adv: "length-adaptive GAE", w: EPS + "<sub>low</sub> " + NE + " " + EPS + "<sub>high</sub>", agg: "token level" }
+},
+
+/* ---------------------------------------------------------------- 8 */
+{ id: "astarpo", nm: "A*-PO", yr: 2025, k: "adv", gx: 1085, gy: 468,
+  full: "Accelerating RL for LLM Reasoning with Optimal Advantage Regression, Xie et al.",
+  url: "https://arxiv.org/abs/2505.20686",
+  parents: [
+    { id: "ppo", k: "adv", why: "estimating a moving advantage online is the real expense" },
+    { id: "grpo", k: "adv", why: "peer rollouts are still online estimation", dash: 1 }
+  ],
+  changed: ["adv", "w", "sel", "score"],
+  fix: "The largest departure on the page. Do not estimate the current policy's advantage at all. Estimate the fixed optimal one, offline, once.",
+  obj: [P("min<sub>" + TH + "</sub>"), S(EE + "<sub>x, y∼" + PI + "<sub>" + TH + "</sub></sub>", "samples"), P("[ ("),
+        G(BET + " log " + frac(PI + "<sub>" + TH + "</sub>(y|x)", PI + "<sub>ref</sub>(y|x)"), 1),
+        P(MIN), A("A<sup>" + STAR + "</sup>(x, y)", 1), P(")<sup>2</sup> ]")],
+  grad: [P("a least squares regression, not a likelihood ratio estimator: the"), G("score function is not the update direction here", 1)],
+  def: [A("&nbsp;A<sup>" + STAR + "</sup>(x, y) = r(x, y) " + MIN + " V<sup>" + STAR + "</sup>(x),", 1), P("&nbsp;&nbsp;"),
+        A("V<sup>" + STAR + "</sup> estimated once, offline, from " + PI + "<sub>ref</sub> samples", 1)],
+  outer: { samples: "one generation per prompt, online", reuse: "V* fit offline, reused throughout" },
+  n: {
+    adv: "Everything above estimates A<sup>" + PI + "<sub>" + TH + "</sub></sup>, which moves as " + TH + " moves and so must be re-fit every step, by a critic or by fresh peers. Under KL-regularized RL, V<sup>" + STAR + "</sup> is <b>fixed</b>, so A<sup>" + STAR + "</sup> = r " + MIN + " V<sup>" + STAR + "</sup> can be fit once offline from " + PI + "<sub>ref</sub> samples and never touched again. This attacks the cost of estimation, not its quality.",
+    w: "No ratio, no clip. The KL to " + PI + "<sub>ref</sub> lives inside the regression target rather than wrapping the update.",
+    sel: "One online generation per prompt against GRPO's G. Reported ~2× training-time reduction over PPO and GRPO in their setup.",
+    sel_samples: "One generation per prompt. That is the entire efficiency claim.",
+    sel_reuse: "V<sup>" + STAR + "</sup> is fit once and amortized over the run.",
+    score: "Displaced, uniquely on this page. Minimizing (" + BET + " log " + PI + "<sub>" + TH + "</sub>/" + PI + "<sub>ref</sub> " + MIN + " A<sup>" + STAR + "</sup>)<sup>2</sup> is least squares on the implied log-ratio, not " + NAB + " log " + PI + " scaled by a coefficient. Not a policy gradient method in the strict sense, which is why it is worth mapping."
+  },
+  mx: { adv: "A" + STAR + " = r " + MIN + " V" + STAR + ", offline", w: "none, KL in the target", samples: "1 generation per prompt", reuse: "V" + STAR + " fit once", score: "least squares" }
+},
+
+/* ---------------------------------------------------------------- 9 */
+{ id: "dadapo", nm: "Direct-Advantage PO", yr: 2024, k: "adv", gx: 150, gy: 468,
+  full: "Improving Multi-Step Reasoning Abilities of Large Language Models with Direct Advantage Policy Optimization, Liu et al.",
+  url: "https://arxiv.org/abs/2412.18279",
+  parents: [{ id: "ac_gae", k: "adv", why: "co-training actor and critic moves both targets at once" }],
+  changed: ["adv", "sel"],
+  warn: "Not the ByteDance DAPO. Same acronym, different group, different year, different everything. Watch for this in any reading list.",
+  fix: "Two problems at once: terminal reward makes reasoning step credit sparse, and jointly training actor and critic makes both targets nonstationary. Fix the second by refusing to co-train.",
+  obj: [P("L(" + TH + ") ="), S(SUM + "<sub>steps s</sub>", "samples", 1), A(HA + "(s, a)", 1),
+        G("log " + PI + "<sub>" + TH + "</sub>(a|s)"), P("&nbsp;&nbsp;with " + HA + " from a frozen, offline-fit critic")],
+  grad: [P("g ="), S(SUM + "<sub>s</sub>", "samples", 1), I("1"), P(DOT), A(HA + "(s, a)", 1), P(DOT), G("∇ log " + PI + "<sub>" + TH + "</sub>(a|s)")],
+  def: [S("&nbsp;roll out continuations from intermediate reasoning states offline " + "→" + " fit the critic on that fixed data " + "→" + " freeze it " + "→" + " score candidate next steps", "samples", 1)],
+  outer: { samples: "offline continuations from intermediate states", reuse: "critic fit once, then frozen" },
+  n: {
+    adv: "" + HA + "(s, a) per reasoning step instead of one terminal scalar: branch continuations out of intermediate states, then score candidate next steps by relative value. The critic is fit first and frozen, so " + TH + " optimizes against a stationary target.",
+    w: "Not addressed.",
+    sel: "Actor and critic are separated in time: offline rollouts → fit critic → freeze → optimize " + PI + ". The argument is that PPO's co-training is itself a source of instability.",
+    sel_samples: "Offline continuations branched from intermediate states, not fresh rollouts.",
+    sel_reuse: "Critic fit once on fixed data. That is the stationarity argument.",
+    score: "Unchanged."
+  },
+  mx: { adv: "offline step-level " + HA, samples: "offline continuations", reuse: "critic fit once" }
+},
+
+/* --------------------------------------------------------------- 10 */
+{ id: "rpp", nm: "REINFORCE++", yr: 2025, k: "adv", gx: 140, gy: 612,
+  full: "REINFORCE++: Stabilizing Critic-Free Policy Optimization with Global Normalization, Hu et al.",
+  url: "https://arxiv.org/abs/2501.03262",
+  parents: [{ id: "grpo", k: "adv", why: "prompt-local normalization reweights prompts by their difficulty" }],
+  changed: ["adv"],
+  fix: "GRPO asks how good this response is relative to the others for this prompt. That question is answered inside a prompt, which means the answer depends on the prompt's difficulty.",
+  obj: [P("L = GRPO's objective, with")],
+  grad: [P("g ="), S(SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg"), W(RHO + "<sub>it</sub>"), P(DOT),
+         A(HA + "<sub>i</sub><sup>global</sup>", 1), P(DOT), G(GLOGY)],
+  def: [A("&nbsp;" + HA + "<sub>i</sub> = " + frac("R<sub>i</sub> " + MIN + " mean(R over the whole batch)", "std(R over the whole batch)"), 1)],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Per-prompt standardization rescales every group to unit variance, so a prompt the model almost always gets right and one it almost always gets wrong come out looking equally informative. Dividing by std<sub>batch</sub> instead keeps each group's spread relative to the others. Only the normalizer's scope moved; the clip is untouched.",
+    w: "Unchanged from GRPO.",
+    sel: "Unchanged. Only the scope the normalizer sees moved.",
+    score: "Unchanged."
+  },
+  mx: { adv: "batch-global normalizer" }
+},
+
+/* --------------------------------------------------------------- 11 */
+{ id: "drgrpo", nm: "Dr. GRPO", yr: 2025, k: "sel", gx: 280, gy: 612,
+  full: "Understanding R1-Zero-Like Training: A Critical Perspective, Liu et al.",
+  url: "https://arxiv.org/abs/2503.20783",
+  parents: [{ id: "grpo", k: "sel", why: "the normalization you assumed was neutral is a bias" }],
+  changed: ["sel", "adv"],
+  fix: "Conceptually the most important small paper here. Your reduction is not neutral. It changes which trajectories receive more gradient.",
+  obj: [P("L ="), S(frac("1", "G") + SUM + "<sub>i</sub>", "agg"), S("<s style='text-decoration-thickness:1px'>" + frac("1", "|y<sub>i</sub>|") + "</s>", "agg", 1),
+        S(SUM + "<sub>t</sub>", "agg"), P("min("), W(RHO + "<sub>it</sub>"), A(HA + "<sub>i</sub>"), P(", "),
+        W("clip(" + RHO + "<sub>it</sub>, 1" + PM + EPS + ")"), A(HA + "<sub>i</sub>"), P(")")],
+  grad: [P("g ="), S(SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg", 1), W(RHO + "<sub>it</sub>"), P(DOT),
+         A(HA + "<sub>i</sub>", 1), P(DOT), G(GLOGY)],
+  def: [A("&nbsp;" + HA + "<sub>i</sub> = R<sub>i</sub> " + MIN + " mean(R<sub>1</sub> " + DOT + DOT + DOT + " R<sub>G</sub>)", 1),
+        P("&nbsp;&nbsp;the std divisor is removed as well")],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Drop the std divisor. A group whose G responses nearly agree has tiny std, so dividing by it inflates that group's gradient far past what its rewards justify. Subtract the mean and stop.",
+    w: "Unchanged.",
+    sel: "GRPO's two divisors bias toward length. Under 1/|y<sub>i</sub>| the per-token gradient falls as 1/|y|, so a wrong answer dilutes its own penalty simply by being longer: <b>longer wrong answers are cheaper</b>. The fix is subtraction, not addition. Drop 1/|y<sub>i</sub>|, drop the std, change nothing else.",
+    sel_agg: "Remove 1/|y<sub>i</sub>|. With it, padding a wrong answer is a way to shrink the penalty each of its tokens receives.",
+    score: "Unchanged."
+  },
+  mx: { adv: "drop the std divisor", agg: "drop the 1/|y<sub>i</sub>|" }
+},
+
+/* --------------------------------------------------------------- 12 */
+{ id: "dapo", nm: "DAPO", yr: 2025, k: "sel", gx: 420, gy: 612,
+  full: "DAPO: An Open-Source LLM Reinforcement Learning System at Scale, Yu et al., ByteDance",
+  url: "https://arxiv.org/abs/2503.14476",
+  parents: [{ id: "grpo", k: "sel", why: "entropy collapse, dead groups, long traces washed out, truncation read as error" }],
+  changed: ["w", "sel", "adv"],
+  fix: "The clearest evidence for the whole thesis of this page: four contributions that modify four different slots of GRPO, bundled under one acronym.",
+  obj: [P("L ="), S(frac("1", SUM + "<sub>i</sub>|y<sub>i</sub>|"), "agg", 1), S(SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg"),
+        P("min("), W(RHO + "<sub>it</sub>"), A(HA + "<sub>i</sub>"), P(", "),
+        W("clip(" + RHO + "<sub>it</sub>, 1" + MIN + EPS + "<sub>low</sub>, 1+" + EPS + "<sub>high</sub>)", 1),
+        A(HA + "<sub>i</sub>"), P(")")],
+  grad: [P("g ="), S(frac("1", SUM + "<sub>i</sub>|y<sub>i</sub>|") + SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg", 1),
+         W("1[ unclipped, " + EPS + "<sub>high</sub> = 0.28 ]", 1), P(DOT), W(RHO + "<sub>it</sub>"), P(DOT),
+         A(HA + "<sub>i</sub>"), P(DOT), G(GLOGY)],
+  def: [S("&nbsp;keep only prompts with 0 &lt; |{ y<sub>i</sub> : R<sub>i</sub> = 1 }| &lt; G", "samples", 1),
+        P("&nbsp;&nbsp;every group in the batch must disagree with itself")],
+  outer: { samples: "resampled until every group has signal", reuse: "K minibatch epochs per batch" },
+  subfix: [
+    ["Clip-Higher", "trust region geometry: decouple the bounds and raise only the upper one"],
+    ["Dynamic sampling", "data selection: discard groups whose advantages are all zero"],
+    ["Token-level loss", "gradient aggregation: every token gets equal weight, not every response"],
+    ["Overlong shaping", "reward semantics: truncation is not evidence of wrong reasoning"]
+  ],
+  n: {
+    adv: "<b>Overlong shaping.</b> A trace cut off at the generation limit collects the failure reward even when the reasoning was sound, and the policy learns from it as evidence. Filter truncated samples, or apply a soft length penalty, instead of reading a budget cutoff as a semantic signal.",
+    w: "<b>Clip-Higher.</b> A symmetric clip is symmetric in the ratio, not in probability. At " + EPS + " = 0.2 a token at " + PI + "<sub>old</sub> = 0.01 can rise only to 0.012, while one at 0.9 gets a ceiling of 1.08 it can never reach. In absolute probability the bound therefore binds hardest on exactly the rare tokens worth exploring, and entropy collapses toward what the model already believes. Decouple the bounds: " + EPS + "<sub>high</sub> = 0.28 against " + EPS + "<sub>low</sub> = 0.20.",
+    sel: "Two of the four contributions land here, and they are unrelated to each other.",
+    sel_samples: "<b>Dynamic sampling.</b> If all G responses score alike, R<sub>i</sub> " + MIN + " mean R = 0 for every i, so the group contributes no gradient after paying full inference. Drop those groups and resample until every group in the batch disagrees with itself.",
+    sel_agg: "<b>Token-level loss.</b> Averaging inside each response first gives every response equal weight, so a token in a 20k trace carries 1/40 the weight of a token in a 500 one. Divide by " + SUM + "<sub>i</sub>|y<sub>i</sub>| across the batch instead and every token weighs the same.",
+    score: "Unchanged."
+  },
+  mx: { adv: "soft length penalty", w: EPS + "<sub>low</sub> " + NE + " " + EPS + "<sub>high</sub>", samples: "drop zero-variance groups", agg: "1/" + SUM + "<sub>i</sub>|y<sub>i</sub>| over the batch" }
+},
+
+/* --------------------------------------------------------------- 13 */
+{ id: "cispo", nm: "CISPO", yr: 2025, k: "w", gx: 560, gy: 612,
+  full: "MiniMax-M1: Scaling Test-Time Compute Efficiently with Lightning Attention, MiniMax",
+  url: "https://arxiv.org/abs/2506.13585",
+  parents: [
+    { id: "grpo", k: "w", why: "hard clipping does not cap the update, it deletes it" },
+    { id: "dapo", k: "w", why: "a wider clip still has an outside", dash: 1 }
+  ],
+  changed: ["w"],
+  fix: "An elegant distinction. PPO clips the surrogate objective. CISPO clips the importance weight. The difference is whether a clipped token gets a smaller gradient or no gradient.",
+  obj: [P("L ="), S(SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg"),
+        W("sg[ clip(" + RHO + "<sub>it</sub>, 1" + MIN + EPS + "<sub>low</sub>, 1+" + EPS + "<sub>high</sub>) ]", 1),
+        A(HA + "<sub>i</sub>"), G("log " + PI + "<sub>" + TH + "</sub>(y<sub>it</sub>|x, y<sub>i,&lt;t</sub>)")],
+  grad: [P("g ="), S(SUM + "<sub>i</sub>" + SUM + "<sub>t</sub>", "agg"),
+         W("sg[ clip(" + RHO + "<sub>it</sub>) ]", 1), P(DOT), A(HA + "<sub>i</sub>"), P(DOT), G(GLOGY),
+         P("&nbsp;&nbsp; the weight is capped, the gradient survives")],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Unchanged from GRPO.",
+    w: "PPO clips the <b>objective</b>; CISPO clips the <b>weight</b>. Under PPO's min, a clipped token's term is constant in " + TH + " and its gradient is 0, so a token that drifted is switched off rather than slowed, and long traces lose a lot of signal quietly. CISPO uses sg[clip(" + RHO + "<sub>it</sub>)] " + DOT + " " + HA + "<sub>i</sub> " + DOT + " " + NAB + " log " + PI + ": the coefficient is bounded, the " + NAB + " log " + PI + " factor is untouched. Capped, not deleted.",
+    sel: "Unchanged.",
+    score: "Survives the clip instead of being zeroed by it. That is the method."
+  },
+  mx: { w: "sg[clip(" + RHO + ")], gradient kept" }
+},
+
+/* --------------------------------------------------------------- 14 */
+{ id: "gspo", nm: "GSPO", yr: 2025, k: "w", gx: 700, gy: 612,
+  full: "Group Sequence Policy Optimization, Zheng et al., Qwen",
+  url: "https://arxiv.org/abs/2507.18071",
+  parents: [{ id: "grpo", k: "w", why: "a per-token ratio is the wrong object for a per-sequence reward" }],
+  changed: ["w", "sel"],
+  fix: "One of the biggest conceptual departures. If the reward is assigned to a whole sequence, what exactly does it mean to importance correct every token independently?",
+  obj: [P("L ="), S(frac("1", "G") + SUM + "<sub>i</sub>", "agg", 1), P("min("), W("s<sub>i</sub>(" + TH + ")", 1),
+        A(HA + "<sub>i</sub>"), P(", "), W("clip(s<sub>i</sub>(" + TH + "), 1" + PM + EPS + ")", 1),
+        A(HA + "<sub>i</sub>"), P(")")],
+  grad: [P("g ="), S(SUM + "<sub>i</sub>", "agg", 1), W("s<sub>i</sub>(" + TH + ")", 1), P(DOT),
+         A(HA + "<sub>i</sub>"), P(DOT), G(frac("1", "|y<sub>i</sub>|") + SUM + "<sub>t</sub> " + GLOGY)],
+  def: [W("&nbsp;s<sub>i</sub>(" + TH + ") = ( " + frac(PI + "<sub>" + TH + "</sub>(y<sub>i</sub>|x)", PI + "<sub>old</sub>(y<sub>i</sub>|x)") + " )<sup>1/|y<sub>i</sub>|</sup>", 1),
+        P("&nbsp;&nbsp;the exponentiated average log ratio")],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Unchanged from GRPO: one " + HA + "<sub>i</sub> per response. The point is that the ratio now lives on that same unit.",
+    w: "Reward and advantage are per sequence, so correcting each token independently against a shared " + HA + "<sub>i</sub> is not a coherent estimator. Match the ratio to the unit: s<sub>i</sub>(" + TH + ") = (" + PI + "<sub>" + TH + "</sub>(y<sub>i</sub>|x)/" + PI + "<sub>old</sub>(y<sub>i</sub>|x))<sup>1/|y<sub>i</sub>|</sup>, one length-normalized sequence ratio, clipped once. Largest gain in MoE training, where small per-token probability mismatches between the sampling and training passes make token ratios extremely noisy.",
+    sel: "The clip now removes a whole response rather than scattered tokens across many, which is a different selection rule.",
+    sel_agg: "Reduction moves to the sequence. There is no per-token clip decision left to aggregate.",
+    score: "Unchanged, now averaged over the response."
+  },
+  mx: { w: "sequence ratio s<sub>i</sub>(" + TH + ")", agg: "clip at sequence level" }
+},
+
+/* --------------------------------------------------------------- 15 */
+{ id: "aspo", nm: "ASPO", yr: 2025, k: "w", gx: 840, gy: 612,
+  full: "When Importance Sampling Misallocates Credit: Asymmetric Ratios for Outcome-Supervised RL",
+  url: "https://arxiv.org/abs/2510.06062",
+  parents: [{ id: "grpo", k: "w", why: "on positive samples the ratio stops correcting and starts rewarding" }],
+  changed: ["w"],
+  fix: "A subtle observation. When every token shares one advantage, the importance ratio stops being only a distribution shift correction and quietly becomes a relative weight between tokens.",
+  obj: [P("for " + HA + "<sub>i</sub> &gt; 0, replace"), W(RHO + "<sub>t</sub>"), P("with"), W(frac("1", RHO + "<sub>t</sub>"), 1),
+        P("(clipped), so lagging tokens lead")],
+  grad: [P("g ="), S(SUM + "<sub>t</sub>", "agg"), W(frac("1", RHO + "<sub>t</sub>"), 1), P(DOT),
+         A(HA + "<sub>i</sub> &gt; 0"), P(DOT), G(GLOGY)],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Unchanged, and that is the problem. " + HA + "<sub>i</sub> is shared by every token, so whatever multiplies it becomes the only thing separating one token from another.",
+    w: "On a positive response the ratio stops correcting and starts ranking. A token the policy already raised has " + RHO + "<sub>t</sub> &gt; 1 and gets <b>more</b> weight; one that lagged has " + RHO + "<sub>t</sub> &lt; 1 and gets <b>less</b>. Rich get richer, and entropy collapses faster. ASPO uses 1/" + RHO + "<sub>t</sub> (clipped) when " + HA + "<sub>i</sub> &gt; 0, so the lagging tokens lead.",
+    sel: "Unchanged.",
+    score: "Unchanged."
+  },
+  mx: { w: "invert " + RHO + " when " + HA + " &gt; 0" }
+},
+
+/* --------------------------------------------------------------- 16 */
+{ id: "stapo", nm: "STAPO", yr: 2026, k: "sel", gx: 980, gy: 612,
+  full: "STAPO: Stabilizing Reinforcement Learning for LLMs by Silencing Rare Spurious Tokens",
+  url: "https://arxiv.org/abs/2602.15620",
+  parents: [{ id: "grpo", k: "sel", why: "a handful of accidental tokens absorb the whole outcome" }],
+  changed: ["sel"],
+  fix: "The opposite pathology to ASPO, from the same root. Some tokens should not receive the outcome gradient at all.",
+  obj: [P("L ="), S(frac("1", SUM + "<sub>t</sub> m<sub>t</sub>") + SUM + "<sub>t</sub>", "agg", 1),
+        S("m<sub>t</sub>", "samples", 1), W(RHO + "<sub>t</sub>"), A(HA + "<sub>i</sub>"),
+        G("log " + PI + "<sub>" + TH + "</sub>(y<sub>t</sub>|x, y<sub>&lt;t</sub>)")],
+  grad: [P("g ="), S(frac("1", SUM + "<sub>t</sub> m<sub>t</sub>") + SUM + "<sub>t</sub>", "agg", 1),
+         S("m<sub>t</sub> " + IN + " {0, 1}", "samples", 1), P(DOT), W(RHO + "<sub>t</sub>"), P(DOT),
+         A(HA + "<sub>i</sub>"), P(DOT), G(GLOGY)],
+  def: [S("&nbsp;m<sub>t</sub> = 0 for tokens that are very low probability, low local entropy, and sitting inside a positive trajectory", "samples", 1)],
+  outer: { samples: "G responses, minus ~0.01% of tokens", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Unchanged, and again the root cause: " + HA + "<sub>i</sub> is handed to every token regardless of what it contributed.",
+    w: "Unchanged.",
+    sel: "About 0.01% of tokens are very low probability, low in local entropy, and sit inside a positive trajectory by coincidence. Outcome supervision hands them the full " + HA + "<sub>i</sub> anyway, and " + NAB + " log " + PI + " scales like 1/" + PI + ", so a token at " + PI + " ≈ 10<sup>" + MIN + "4</sup> contributes a gradient orders of magnitude above a typical one. Set m<sub>t</sub> = 0 for them and renormalize over " + SUM + "<sub>t</sub> m<sub>t</sub>.<br><br>Same root as ASPO, opposite tail. <b>ASPO</b> reweights already confident positive tokens down; <b>STAPO</b> removes pathological ones outright.",
+    sel_agg: "Renormalize over " + SUM + "<sub>t</sub> m<sub>t</sub>. Without it, masking silently shrinks the whole update.",
+    score: "Unchanged for the tokens that survive the mask."
+  },
+  mx: { samples: "mask spurious tokens", agg: "renormalize over kept tokens" }
+},
+
+/* --------------------------------------------------------------- 17 */
+{ id: "gigpo", nm: "GiGPO", yr: 2025, k: "adv", gx: 1120, gy: 612,
+  full: "Group-in-Group Policy Optimization for LLM Agent Training, Feng et al.",
+  url: "https://arxiv.org/abs/2505.10978",
+  parents: [{ id: "grpo", k: "adv", why: "one episode reward gives terrible multi-turn credit" }],
+  changed: ["adv"],
+  fix: "GRPO's shape assumes question, one trace, one reward. An agent that searches, clicks, fails and recovers over twelve steps gets a single number for all of it.",
+  obj: [P("L = GRPO's objective, with a two level advantage")],
+  grad: [P("g ="), S(SUM + "<sub>t</sub>", "agg"), W(RHO + "<sub>t</sub>"), P(DOT),
+         A(HA + "<sub>t</sub><sup>episode</sup> + " + OM + " " + HA + "<sub>t</sub><sup>step</sup>", 1), P(DOT), G(GLOGY)],
+  def: [A("&nbsp;" + HA + "<sup>step</sup> from <b>anchor-state grouping</b>: when different trajectories pass through the same environment state, compare the actions taken from it", 1)],
+  outer: { samples: "G trajectories per task, grouped twice", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "" + HA + "<sub>t</sub><sup>episode</sup> + " + OM + " " + HA + "<sub>t</sub><sup>step</sup>. The second term comes from anchor-state grouping: when different trajectories pass through the <b>same environment state</b>, the actions taken from it can be compared against each other after the fact. Step-relative credit with no critic and no extra rollouts, since the trajectories were collected anyway.",
+    w: "Unchanged from GRPO.",
+    sel: "Rollouts grouped twice: by task, and by anchor state.",
+    score: "Unchanged."
+  },
+  mx: { adv: HA + "<sup>episode</sup> + " + OM + " " + HA + "<sup>step</sup>", samples: "grouped by task and by state" }
+},
+
+/* --------------------------------------------------------------- 18 */
+{ id: "sapo", nm: "SAPO", yr: 2025, k: "w", gx: 700, gy: 730,
+  full: "Soft Adaptive Policy Optimization, Qwen",
+  url: "https://arxiv.org/abs/2511.20347",
+  parents: [{ id: "gspo", k: "w", why: "a hard boundary is still a cliff" }],
+  changed: ["w"],
+  fix: "A full circle back to TRPO's original question, with a continuous answer. Every method above draws a line and treats the two sides completely differently.",
+  obj: [P("L ="), S(SUM + "<sub>t</sub>", "agg"), W("w<sub>" + TAU + "</sub>(" + RHO + "<sub>t</sub>)", 1),
+        A(HA + "<sub>t</sub>"), G("log " + PI + "<sub>" + TH + "</sub>(y<sub>t</sub>|x, y<sub>&lt;t</sub>)"),
+        P("&nbsp;&nbsp;with " + TAU + "<sub>+</sub> " + NE + " " + TAU + "<sub>" + MIN + "</sub>")],
+  grad: [P("g ="), S(SUM + "<sub>t</sub>", "agg"), W("w<sub>" + TAU + "</sub>(" + RHO + "<sub>t</sub>)", 1), P(DOT),
+         A(HA + "<sub>t</sub>"), P(DOT), G(GLOGY),
+         P("&nbsp;&nbsp; w<sub>" + TAU + "</sub> " + "≈" + " 1 near " + RHO + " = 1, decaying smoothly away from it")],
+  outer: { samples: "G responses per prompt", reuse: "K minibatch epochs per batch" },
+  n: {
+    adv: "Unchanged.",
+    w: "Every guard above is an indicator: a token just inside keeps its full gradient, one just outside keeps almost none, so its contribution turns on which side of a threshold it landed. SAPO replaces 1[" + DOT + "] with a smooth gate w<sub>" + TAU + "</sub>(" + RHO + "<sub>t</sub>) ≈ 1 near " + RHO + " = 1, decaying continuously away from it, with " + TAU + "<sub>+</sub> " + NE + " " + TAU + "<sub>" + MIN + "</sub> because overshooting and undershooting destabilize differently.",
+    sel: "Unchanged.",
+    score: "Unchanged, and never zeroed by a threshold."
+  },
+  mx: { w: "smooth gate w<sub>" + TAU + "</sub>(" + RHO + ")" }
+}
+
+];
+
+/* ------------------------------------------------------------------ *
+ *  METHOD BUILDER. The score-function gradient is the common chassis;
+ *  these four independent choices describe the credit, update geometry,
+ *  reduction and data loop around it. Every named recipe is complete.
+ * ------------------------------------------------------------------ */
+var BUILD_AXES = [
+  { id: "credit", k: "adv", nm: "Credit signal", q: "How much credit does a single action get?",
+    span: 10,
+    options: [
+    { id: "raw_return", nm: "Raw return", formula: "G<sub>t</sub>", note: "Use the sampled future return directly, with no baseline at all." },
+    { id: "learned_critic", nm: "Learned critic", formula: HA + "<sub>t</sub><sup>GAE</sup>", note: "Fit a value model and trade bias for variance with GAE." },
+    { id: "group_baseline", nm: "Group baseline", formula: "R<sub>i</sub> " + MIN + " mean(R<sub>x</sub>)", note: "Subtract the mean reward of the peer responses to the same prompt, and stop there." },
+    { id: "group_zscore", nm: "Group z-score", formula: "(R<sub>i</sub> " + MIN + " R̄<sub>x</sub>)/" + SIG + "<sub>x</sub>", note: "Standardize rewards inside each prompt group, dividing by the group spread." },
+    { id: "batch_zscore", nm: "Batch z-score", formula: "(R " + MIN + " R̄<sub>batch</sub>)/" + SIG + "<sub>batch</sub>", note: "Standardize over the whole batch, so prompt difficulty is not normalized away." },
+    { id: "step_credit", nm: "Step credit", formula: HA + "<sub>t</sub><sup>step</sup>", note: "Score individual reasoning steps or actions, not only the finished response." },
+    { id: "offline_astar", nm: "Offline A" + STAR, formula: "A<sup>" + STAR + "</sup> = r " + MIN + " V<sup>" + STAR + "</sup>", note: "Estimate the fixed optimal advantage once, offline, instead of chasing a moving one." }
+  ]},
+  { id: "update", k: "w", nm: "Policy update", q: "How far can the policy move?",
+    span: 5,
+    options: [
+    { id: "unconstrained", nm: "No trust region", formula: "1", note: "Use no importance-ratio guard and no explicit constraint on the step." },
+    { id: "hard_kl", nm: "Hard KL ball", formula: "D<sub>KL</sub> " + LE + " " + DEL, note: "Maximize the ratio-weighted surrogate subject to a mean-KL constraint." },
+    { id: "ppo_clip", nm: "Clipped ratio", formula: "min(" + RHO + "A, clip(" + RHO + ")A)", note: "Use PPO's per-item ratio-clipped objective." },
+    { id: "asym_clip", nm: "Clip higher", formula: EPS + "<sub>low</sub> " + NE + " " + EPS + "<sub>high</sub>", note: "Decouple the two clip bounds and raise only the upper one." },
+    { id: "clipped_weight", nm: "Cap the weight", formula: "sg[clip(" + RHO + ")]", note: "Clip and detach the importance weight while keeping the score gradient alive." },
+    { id: "sequence_clip", nm: "Sequence ratio", formula: "clip(s<sub>i</sub>(" + TH + "))", note: "Clip one length-normalized ratio for the whole response." },
+    { id: "inverse_positive", nm: "Invert positives", formula: "1/" + RHO + " when " + HA + " &gt; 0", note: "Give lagging tokens more weight on successful responses." },
+    { id: "soft_gate", nm: "Smooth gate", formula: "w<sub>" + TAU + "</sub>(" + RHO + ")", note: "Attenuate large policy moves continuously instead of clipping at a boundary." }
+  ]},
+  { id: "reduction", k: "sel", nm: "Gradient averaging", q: "What counts as one unit in the average?",
+    span: 6,
+    options: [
+    { id: "sample_sum", nm: "Sum in sample", formula: SUM + "<sub>t</sub>", note: "Sum the terms inside a sample, with no response-length divisor." },
+    { id: "token_mean", nm: "Token mean", formula: "mean<sub>tokens</sub>", note: "Give every token or transition in the batch equal weight, so long traces survive." },
+    { id: "response_mean", nm: "Response mean", formula: frac("1", "G") + SUM + "<sub>i</sub> " + frac("1", "|y<sub>i</sub>|") + SUM + "<sub>t</sub>", note: "Average tokens inside each response first, so responses carry equal weight." },
+    { id: "masked_token_mean", nm: "Masked mean", formula: frac("1", SUM + "m<sub>t</sub>") + SUM + "m<sub>t</sub>", note: "Drop selected tokens and renormalize over the ones that remain." }
+  ]},
+  { id: "data", k: "sel", nm: "Data loop", q: "Where do the rollouts come from, and how often are they reused?",
+    span: 9,
+    options: [
+    { id: "fresh_once", nm: "Fresh · once", formula: "on-policy → 1 update", note: "Collect one freshd fr on-policy batch and take a single update from it." },
+    { id: "reuse_epochs", nm: "Batch · K epochs", formula: "rollouts → K epochs", note: "Reuse one rollout batch for several minibatch epochs." },
+    { id: "group_once", nm: "Group · once", formula: "G responses → 1 update", note: "Sample several responses per prompt and update once, fully on-policy." },
+    { id: "group_epochs", nm: "Group · K epochs", formula: "G responses → K epochs", note: "Sample response groups and reuse them for several minibatch epochs." },
+    { id: "offline_frozen", nm: "Offline · frozen", formula: "fit once → freeze", note: "Fit the value or advantage target once on fixed data, then hold it still." }
+  ]}
+];
+
+var RECIPES = {
+  reinforce: { credit: "raw_return", update: "unconstrained", reduction: "sample_sum", data: "fresh_once" },
+  ac_gae: { credit: "learned_critic", update: "unconstrained", reduction: "sample_sum", data: "fresh_once" },
+  trpo: { credit: "learned_critic", update: "hard_kl", reduction: "token_mean", data: "fresh_once" },
+  ppo: { credit: "learned_critic", update: "ppo_clip", reduction: "token_mean", data: "reuse_epochs" },
+  rloo: { credit: "group_baseline", update: "unconstrained", reduction: "sample_sum", data: "group_once" },
+  grpo: { credit: "group_zscore", update: "ppo_clip", reduction: "response_mean", data: "group_epochs" },
+  vapo: { credit: "learned_critic", update: "asym_clip", reduction: "token_mean", data: "group_epochs" },
+  astarpo: { credit: "offline_astar", update: "unconstrained", reduction: "response_mean", data: "offline_frozen" },
+  dadapo: { credit: "step_credit", update: "unconstrained", reduction: "sample_sum", data: "offline_frozen" },
+  rpp: { credit: "batch_zscore", update: "ppo_clip", reduction: "response_mean", data: "group_epochs" },
+  drgrpo: { credit: "group_baseline", update: "ppo_clip", reduction: "sample_sum", data: "group_epochs" },
+  dapo: { credit: "group_zscore", update: "asym_clip", reduction: "token_mean", data: "group_epochs" },
+  cispo: { credit: "group_zscore", update: "clipped_weight", reduction: "response_mean", data: "group_epochs" },
+  gspo: { credit: "group_zscore", update: "sequence_clip", reduction: "response_mean", data: "group_epochs" },
+  aspo: { credit: "group_zscore", update: "inverse_positive", reduction: "response_mean", data: "group_epochs" },
+  stapo: { credit: "group_zscore", update: "ppo_clip", reduction: "masked_token_mean", data: "group_epochs" },
+  gigpo: { credit: "step_credit", update: "ppo_clip", reduction: "response_mean", data: "group_epochs" },
+  sapo: { credit: "group_zscore", update: "soft_gate", reduction: "response_mean", data: "group_epochs" }
+};
+
+function GE() { return "≥"; }
+
+/* ------------------------------------------------------------------ *
+ *  index + graph geometry
+ * ------------------------------------------------------------------ */
+var BY = {}, ORDER = [];
+METHODS.forEach(function (m, i) { BY[m.id] = m; m.i = i; ORDER.push(m.id); });
+
+var NH = 38;
+function nodeW(m) { return Math.max(96, m.nm.length * 8.4 + 22); }
+
+var EDGES = [];
+METHODS.forEach(function (m) {
+  (m.parents || []).forEach(function (p) {
+    EDGES.push({ a: p.id, b: m.id, k: p.k, why: p.why, dash: p.dash });
+  });
+});
+
+var BANDS = [
+  { y: 34, h: 376, t: "the trunk: one estimator, two repairs" },
+  { y: 414, h: 124, t: "the fork: who computes the advantage" },
+  { y: 542, h: 228, t: "the patch layer: which piece of the estimator is wrong" }
+];
+
+var AXIS_IDS = BUILD_AXES.map(function (axis) { return axis.id; });
+var MODULE_BY_AXIS = {};
+BUILD_AXES.forEach(function (axis) {
+  MODULE_BY_AXIS[axis.id] = {};
+  axis.options.forEach(function (option) { MODULE_BY_AXIS[axis.id][option.id] = option; });
+});
+
+function copyRecipe(recipe) {
+  var copy = {};
+  AXIS_IDS.forEach(function (axis) { copy[axis] = recipe[axis]; });
+  return copy;
+}
+
+function recipeSignature(recipe) {
+  return AXIS_IDS.map(function (axis) { return recipe[axis]; }).join("|");
+}
+
+function moduleFor(axis, id) {
+  return MODULE_BY_AXIS[axis] && MODULE_BY_AXIS[axis][id];
+}
+
+var RECIPE_BY_SIGNATURE = {};
+METHODS.forEach(function (method) {
+  var recipe = RECIPES[method.id];
+  if (!recipe) throw new Error("Missing builder recipe for " + method.id);
+  var signature = recipeSignature(recipe);
+  if (RECIPE_BY_SIGNATURE[signature]) throw new Error("Duplicate builder recipe: " + method.id);
+  RECIPE_BY_SIGNATURE[signature] = method.id;
+});
+
+/* ------------------------------------------------------------------ *
+ *  state
+ * ------------------------------------------------------------------ */
+var cur = "grpo", curKnob = null, curFacet = null, showGhost = true;
+var builderState = copyRecipe(RECIPES.grpo), customMode = false, customMethod = null;
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s).replace(/&(?![a-z#]+;)/g, "&amp;"); }
+function activeMethod() { return customMode ? customMethod : BY[cur]; }
+
+/* ------------------------------------------------------------------ *
+ *  equation rendering
+ * ------------------------------------------------------------------ */
+function eqHTML(tokens, ghost) {
+  if (!tokens) return "";
+  return tokens.map(function (t) {
+    if (!t.k) return "<span class='op'>" + t.h + "</span>";
+    var cls = "tok" + (t.inert ? " inert" : "") + (t.c ? " chg" : "");
+    var f = t.f ? " data-f='" + t.f + "'" : "";
+    if (ghost) return "<span class='" + cls + "' data-k='" + t.k + "'" + f + ">" + t.h + "</span>";
+    return "<span class='" + cls + "' data-k='" + t.k + "'" + f + " tabindex='0' role='button'>" + t.h + "</span>";
+  }).join(" ");
+}
+
+/* ------------------------------------------------------------------ *
+ *  render: the canvas
+ * ------------------------------------------------------------------ */
+function renderCanvas() {
+  var m = activeMethod();
+  var par = !customMode && m.parents && m.parents.length ? BY[m.parents[0].id] : null;
+
+  $("methodCanvas").classList.toggle("custom", customMode);
+
+  $("mName").textContent = m.nm;
+  if (customMode) $("mFull").textContent = m.full;
+  else {
+    $("mFull").innerHTML = "<a href='" + m.url + "' target='_blank' rel='noopener'>" + esc(m.full) + "</a> "
+      + "<span class='yr'>(" + m.yr + ")</span>";
+  }
+
+  var chg = "";
+  if (customMode) {
+    chg = "<span class='t'>assembled from</span>";
+    BUILD_AXES.forEach(function (axis) {
+      chg += "<span class='tag' data-k='" + axis.k + "'>" + esc(moduleFor(axis.id, builderState[axis.id]).nm) + "</span>";
+    });
+  } else if (par) {
+    chg = "<span class='t'>edits " + esc(par.nm) + " at</span>";
+    m.changed.forEach(function (k) {
+      chg += "<span class='tag' data-k='" + k + "'>" + KNOBS[k].nm + "</span>";
+    });
+    if (!m.changed.length) chg += "<span class='tag' data-k='score'>nothing</span>";
+  } else {
+    chg = "<span class='t'>the root</span>";
+  }
+  $("mChg").innerHTML = chg;
+
+  var gw = $("rowGhost");
+  if (par && showGhost) {
+    gw.style.display = "";
+    var gt = (par.grad || []).map(function (t) {
+      var copy = { k: t.k, h: t.h, f: t.f, inert: t.inert };
+      copy.c = t.k && m.changed.indexOf(t.k) >= 0 ? 1 : 0;
+      return copy;
+    });
+    gw.innerHTML = "<div class='side'>" + esc(par.nm) + ", the line being edited</div>"
+      + "<div class='eq small'>" + eqHTML(gt, true) + "</div>";
+  } else { gw.style.display = "none"; gw.innerHTML = ""; }
+
+  $("objSide").textContent = customMode ? "module schematic" : (m.id === "astarpo" ? "objective, a regression" : "objective");
+  $("gradSide").textContent = customMode ? "what is safe to claim" : (m.id === "astarpo" ? "what the regression fits" : "what one token actually receives");
+  $("rowObj").innerHTML = eqHTML(m.obj);
+  $("rowGrad").innerHTML = eqHTML(m.grad);
+  if (m.def) { $("rowDefWrap").style.display = ""; $("rowDef").innerHTML = eqHTML(m.def); }
+  else { $("rowDefWrap").style.display = "none"; }
+
+  var o = m.outer || (par ? par.outer : null) || {};
+  $("outer").innerHTML =
+    "<button class='oslot' data-k='sel' data-f='samples'><span class='k'>which samples</span><span class='v'>" + o.samples + "</span></button>" +
+    "<button class='oslot' data-k='sel' data-f='reuse'><span class='k'>sample reuse</span><span class='v'>" + o.reuse + "</span></button>";
+
+  $("cbody").classList.remove("swap");
+  void $("cbody").offsetWidth;
+  $("cbody").classList.add("swap");
+
+  $("parentToggle").hidden = customMode || !par;
+  $("ghostBtn").setAttribute("aria-checked", showGhost ? "true" : "false");
+  $("permalink").textContent = customMode
+    ? "#build=" + recipeSignature(builderState).replace(/\|/g, ",")
+    : "#" + m.id;
+  wireTokens();
+  renderPanel();
+}
+
+function wireTokens() {
+  var toks = document.querySelectorAll("#cbody .tok:not(.inert), .oslot");
+  Array.prototype.forEach.call(toks, function (el) {
+    if (el.closest && el.closest(".ghost")) return;
+    el.addEventListener("click", function () { pick(el.getAttribute("data-k"), el.getAttribute("data-f")); });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(el.getAttribute("data-k"), el.getAttribute("data-f")); }
+    });
+    el.addEventListener("mouseenter", function () { lite(el.getAttribute("data-k")); });
+    el.addEventListener("mouseleave", function () { lite(curKnob); });
+  });
+  var inert = document.querySelectorAll("#cbody .tok.inert");
+  Array.prototype.forEach.call(inert, function (el) {
+    el.addEventListener("click", function () { pick("w", null); });
+  });
+  lite(curKnob);
+}
+
+function lite(k) {
+  var all = document.querySelectorAll(".tok");
+  Array.prototype.forEach.call(all, function (el) {
+    el.classList.toggle("lit", !!k && el.getAttribute("data-k") === k);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".knob"), function (el) {
+    el.classList.toggle("on", el.getAttribute("data-k") === k);
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".axis-dropdown, .guide-cell"), function (el) {
+    el.classList.toggle("lit", !!k && el.getAttribute("data-k") === k);
+  });
+}
+
+function pick(k, f) {
+  if (curKnob === k && curFacet === f) { curKnob = null; curFacet = null; }
+  else { curKnob = k; curFacet = f || null; }
+  lite(curKnob);
+  Array.prototype.forEach.call(document.querySelectorAll("#cbody .tok, .oslot"), function (el) {
+    var on = curKnob && el.getAttribute("data-k") === curKnob &&
+             (!curFacet || el.getAttribute("data-f") === curFacet);
+    el.classList.toggle("on", !!on);
+  });
+  renderPanel();
+}
+
+function renderPanel() {
+  var m = activeMethod(), p = $("panel");
+  if (!curKnob) {
+    p.removeAttribute("data-k");
+    var h = "<div class='ph'><span class='nm'>" + esc(m.nm) + "</span>"
+      + "<span class='facet'>" + (customMode ? "how these choices fit" : "what it changes and why") + "</span></div>"
+      + "<p>" + m.fix + "</p>";
+    if (m.subfix) {
+      h += "<div class='subfix'>";
+      m.subfix.forEach(function (r) { h += "<div class='r'><span class='a'>" + r[0] + "</span><span class='b'>" + r[1] + "</span></div>"; });
+      h += "</div>";
+    }
+    if (m.warn) h += "<div class='warnline'>" + m.warn + "</div>";
+    h += "<p class='idle' style='margin-top:12px'>Click any coloured piece above.</p>";
+    p.innerHTML = h;
+    return;
+  }
+  var K = KNOBS[curKnob];
+  var txt = (curFacet && m.n[curKnob + "_" + curFacet]) || m.n[curKnob] || K.blurb;
+  var title;
+  if (curKnob === "adv") title = "How " + m.nm + " assigns credit";
+  else if (curKnob === "w") title = "How " + m.nm + " limits an update";
+  else if (curKnob === "sel" && curFacet === "samples") title = "Which samples " + m.nm + " uses";
+  else if (curKnob === "sel" && curFacet === "agg") title = "How " + m.nm + " combines gradients";
+  else if (curKnob === "sel" && curFacet === "reuse") title = "How " + m.nm + " reuses samples";
+  else if (curKnob === "sel") title = "What " + m.nm + " includes in an update";
+  else title = "The score function in " + m.nm;
+  p.setAttribute("data-k", curKnob);
+  p.innerHTML = "<div class='ph'><span class='nm'>" + esc(title) + "</span></div>"
+    + "<p>" + txt + "</p>";
+}
+
+/* ------------------------------------------------------------------ *
+ *  render: knob legend
+ * ------------------------------------------------------------------ */
+function renderKnobs() {
+  var h = "";
+  KNOB_LEGEND.forEach(function (k) {
+    h += "<div class='knob' data-k='" + k + "'>"
+      + "<div class='sym'>" + KNOBS[k].sym + "</div>"
+      + "<div class='nm'>" + KNOBS[k].nm + "</div>"
+      + "<span class='un'></span>"
+      + "<div class='blurb'>" + KNOBS[k].blurb + "</div>"
+      + "</div>";
+  });
+  $("knobs").innerHTML = h;
+}
+
+/* ------------------------------------------------------------------ *
+ *  the four guide diagrams. Hand-rolled SVG, no libraries. Each
+ *  viewBox is sized close to the cell it lands in so the 100% width
+ *  scale stays near 1:1 and the labels render at their nominal size.
+ * ------------------------------------------------------------------ */
+/* One source of truth for each diagram's natural size: it sets the viewBox
+   and, as --vw, the max-width that stops a stacked cell from scaling the
+   labels up past their nominal size. */
+var VZ = {
+  credit:    { w: 480, h: 134, draw: vizCredit },
+  update:    { w: 224, h: 128, draw: vizUpdate },
+  reduction: { w: 276, h: 108, draw: vizReduction },
+  data:      { w: 430, h: 110, draw: vizData }
+};
+
+function vzOpen(id, label) {
+  return "<svg class='viz' viewBox='0 0 " + VZ[id].w + " " + VZ[id].h + "'"
+    + " role='img' aria-label='" + label + "'>";
+}
+
+function vzMarker(id) {
+  return "<defs><marker id='" + id + "' viewBox='0 0 10 10' refX='8.5' refY='5' "
+    + "markerWidth='5' markerHeight='5' orient='auto-start-reverse'>"
+    + "<path class='vmark' d='M0 1 L9 5 L0 9 z'/></marker></defs>";
+}
+
+/* Six sampled rewards, then the same six after a baseline is removed. */
+function vizCredit() {
+  var rewards = [0, 0.2, 0.4, 0.6, 0.8, 1], mean = 0.5;
+  var x0 = 62, w = 58, gap = 10;
+  var s = vzOpen("credit", "Six sampled rewards from 0 to 1, and the signed credit "
+    + "each becomes once the group mean is subtracted");
+  s += "<defs><linearGradient id='vzCr' x1='0' y1='0' x2='1' y2='0'>"
+    + "<stop offset='0' class='gsn' stop-opacity='0.77'/>"
+    + "<stop offset='0.5' class='gsn' stop-opacity='0.06'/>"
+    + "<stop offset='0.5' class='gsp' stop-opacity='0.06'/>"
+    + "<stop offset='1' class='gsp' stop-opacity='0.77'/>"
+    + "</linearGradient></defs>";
+  s += "<text class='vk' x='0' y='25'>REWARD</text>";
+  s += "<text class='vk' x='0' y='36'>(RAW)</text>";
+  s += "<text class='vk' x='0' y='57'>BASELINE</text>";
+  s += "<text class='vk' x='0' y='93'>CREDIT</text>";
+  rewards.forEach(function (v, i) {
+    var x = x0 + i * (w + gap), mid = x + w / 2, c = v - mean;
+    s += "<text class='vn' x='" + mid + "' y='10' text-anchor='middle'>" + v.toFixed(1) + "</text>";
+    s += "<rect class='vsq pos' x='" + x + "' y='14' width='" + w + "' height='28'"
+      + " fill-opacity='" + (0.09 + v * 0.68).toFixed(3) + "'/>";
+    s += "<text class='vn' x='" + mid + "' y='71' text-anchor='middle'>"
+      + (c < 0 ? MIN : "+") + Math.abs(c).toFixed(1) + "</text>";
+    s += "<rect class='vsq " + (c < 0 ? "neg" : "pos") + "' x='" + x + "' y='76' width='" + w + "' height='28'"
+      + " fill-opacity='" + (0.09 + Math.abs(c) / mean * 0.68).toFixed(3) + "'/>";
+  });
+  /* The rule stops short so its value can sit at the end of it, flush with
+     the right edge of the squares. Without it the baseline is just a line. */
+  s += "<line class='vrule dash' x1='" + x0 + "' y1='54' x2='436' y2='54'/>";
+  s += "<text class='vn' x='460' y='57.5' text-anchor='end'>" + mean.toFixed(1) + "</text>";
+  /* Legend for the diverging fill in the credit row: the same two hues at the
+     same peak opacity, meeting at the near-white the baseline itself produces. */
+  s += "<rect class='vbar' x='" + x0 + "' y='112' width='" + (460 - x0) + "' height='7' rx='3.5'"
+    + " fill='url(#vzCr)'/>";
+  s += "<text class='vk' x='" + x0 + "' y='131'>PUSHED DOWN</text>";
+  s += "<text class='vk' x='460' y='131' text-anchor='end'>REINFORCED</text>";
+  return s + "</svg>";
+}
+
+/* Nested guards around the policy that sampled the data. */
+function vizUpdate() {
+  var cx = 112, cy = 72;
+  var s = vzOpen("update", "Three nested trust regions around the sampling policy, "
+    + "with a step that is cut off at the clip boundary");
+  s += vzMarker("vzUp");
+  s += "<circle class='vring r3' cx='" + cx + "' cy='" + cy + "' r='52'/>";
+  s += "<circle class='vring r2' cx='" + cx + "' cy='" + cy + "' r='36'/>";
+  s += "<circle class='vring r1' cx='" + cx + "' cy='" + cy + "' r='20'/>";
+  s += "<path class='varr dash' d='M129 83 L150 98' marker-end='url(#vzUp)'/>";
+  s += "<path class='varr' d='M" + cx + " " + cy + " L129 83'/>";
+  s += "<circle class='vdot' cx='" + cx + "' cy='" + cy + "' r='3.2'/>";
+  /* Baselines sit 4px clear of each ring top: a halo alone leaves the ring
+     showing through the word spaces, which reads as a stray hyphen. */
+  s += "<text class='vk vhalo' x='" + cx + "' y='" + (cy - 52 - 4) + "' text-anchor='middle'>NO GUARD</text>";
+  s += "<text class='vk vhalo' x='" + cx + "' y='" + (cy - 36 - 4) + "' text-anchor='middle'>KL BALL</text>";
+  s += "<text class='vk vhalo' x='" + cx + "' y='" + (cy - 20 - 4) + "' text-anchor='middle'>CLIP 1" + PM + EPS + "</text>";
+  return s + "</svg>";
+}
+
+/* One short response and one long one, shaded by the weight each token gets. */
+function vizReduction() {
+  function strip(y, n, op) {
+    var out = "";
+    for (var i = 0; i < n; i++) {
+      out += "<rect class='vsq tok' x='" + (i * 20) + "' y='" + y + "' width='17' height='17'"
+        + " fill-opacity='" + op + "'/>";
+    }
+    return out;
+  }
+  var s = vzOpen("reduction", "A four token response and a twelve token response, shaded by "
+    + "the gradient weight each token receives under the two rules");
+  s += "<text class='vk' x='0' y='9'>EVERY TOKEN EQUAL</text>";
+  s += strip(13, 4, 0.5) + strip(32, 12, 0.5);
+  s += "<text class='vk' x='0' y='64'>EVERY RESPONSE EQUAL</text>";
+  s += strip(68, 4, 0.8) + strip(87, 12, 0.27);
+  return s + "</svg>";
+}
+
+/* Where rollouts come from, and how many updates they survive. */
+function vizData() {
+  var s = vzOpen("data", "A prompt fans out into G responses, which feed an update "
+    + "that may be repeated for K epochs before the next batch");
+  s += vzMarker("vzDt");
+  /* The flow is narrower than the viewBox, which is sized to the cell it
+     lands in. Measured content runs x=2..359, so this centres it instead of
+     leaving the figure hard against the left edge. */
+  s += "<g transform='translate(34, 0)'>";
+  s += "<rect class='vbox' x='2' y='34' width='76' height='26'/>";
+  s += "<text class='vk' x='40' y='51' text-anchor='middle'>PROMPT</text>";
+  s += "<path class='varr' d='M82 47 L100 47' marker-end='url(#vzDt)'/>";
+  /* Five bars, pitch 12, centred on the box mid-line at y=47: they carry the
+     figure's vertical extent, which three left looking thin. The .5 offsets
+     put the 1px stroke on a pixel boundary. */
+  s += "<text class='vk' x='160' y='10' text-anchor='middle'>G RESPONSES</text>";
+  [18.5, 30.5, 42.5, 54.5, 66.5].forEach(function (y) {
+    s += "<rect class='vsq tok' x='108' y='" + y + "' width='104' height='9' fill-opacity='0.45'/>";
+  });
+  s += "<path class='varr' d='M218 47 L236 47' marker-end='url(#vzDt)'/>";
+  s += "<rect class='vbox' x='242' y='34' width='80' height='26'/>";
+  s += "<text class='vk' x='282' y='51' text-anchor='middle'>UPDATE</text>";
+  s += "<path class='varr' d='M268 24 A14 14 0 0 1 296 24' marker-end='url(#vzDt)'/>";
+  s += "<text class='vk' x='304' y='28'>×K EPOCHS</text>";
+  s += "<path class='varr dash' d='M322 58 C362 74, 352 90, 302 90 L62 90 C12 90, 6 74, 40 62' marker-end='url(#vzDt)'/>";
+  s += "<text class='vk' x='181' y='105' text-anchor='middle'>NEXT BATCH</text>";
+  s += "</g>";
+  return s + "</svg>";
+}
+
+/* ------------------------------------------------------------------ *
+ *  render: what each of the four dropdowns controls. Two rows of two,
+ *  deliberately unequal: the wider cell in each row is the one with
+ *  more to say.
+ * ------------------------------------------------------------------ */
+function renderAxisGuide() {
+  var h = "";
+  BUILD_AXES.forEach(function (axis, axisIndex) {
+    var number = axisIndex < 9 ? "0" + (axisIndex + 1) : String(axisIndex + 1);
+    h += "<div class='guide-cell' data-axis='" + axis.id + "' data-k='" + axis.k + "'"
+      + " style='--span: " + axis.span + "; --vw: " + VZ[axis.id].w + "px'>"
+      + "<div class='guide-head'><span class='guide-num'>" + number + "</span> " + esc(axis.nm) + "</div>"
+      + "<span class='guide-un'></span>"
+      + "<div class='guide-q'>" + esc(axis.q) + "</div>"
+      + VZ[axis.id].draw()
+      + "</div>";
+  });
+  $("axisGuide").innerHTML = h;
+  Array.prototype.forEach.call($("axisGuide").querySelectorAll(".guide-cell"), function (el) {
+    el.addEventListener("mouseenter", function () { lite(el.getAttribute("data-k")); });
+    el.addEventListener("mouseleave", function () { lite(curKnob); });
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ *  render: independent method builder
+ * ------------------------------------------------------------------ */
+function renderBuilder() {
+  var h = "";
+  BUILD_AXES.forEach(function (axis, axisIndex) {
+    var labelId = "axisLabel-" + axis.id;
+    var currentId = "axisCurrent-" + axis.id;
+    var subtitleId = "axisSubtitle-" + axis.id;
+    var number = axisIndex < 9 ? "0" + (axisIndex + 1) : String(axisIndex + 1);
+    h += "<div class='axis-field' data-axis='" + axis.id + "' data-k='" + axis.k + "'>"
+      + "<div class='axis-heading' id='" + labelId + "'><span class='axis-num'>" + number + "</span> " + esc(axis.nm) + "</div>"
+      + "<details class='axis-dropdown' data-axis='" + axis.id + "' data-k='" + axis.k + "'>"
+      + "<summary class='axis-trigger' aria-labelledby='" + labelId + " " + currentId + "' aria-describedby='" + subtitleId + "'>"
+      + "<span class='axis-current' id='" + currentId + "'></span></summary>"
+      + "<p class='axis-subtitle' id='" + subtitleId + "'></p>"
+      + "<div class='axis-menu' role='radiogroup' aria-labelledby='" + labelId + "'>";
+    axis.options.forEach(function (option) {
+      h += "<label class='axis-option'><input type='radio' name='build-" + axis.id + "' data-axis='" + axis.id + "' value='" + option.id + "'>"
+        + "<span class='option-copy'>"
+        + "<span class='option-name'>" + esc(option.nm) + "</span>"
+        + "<span class='option-formula'>" + option.formula + "</span></span></label>";
+    });
+    h += "</div></details></div>";
+  });
+  $("builder").innerHTML = h;
+  Array.prototype.forEach.call($("builder").querySelectorAll(".axis-option input"), function (input) {
+    function closeAndFocus() {
+      var dropdown = input.closest(".axis-dropdown");
+      var trigger = dropdown.querySelector(".axis-trigger");
+      dropdown.open = false;
+      trigger.focus();
+    }
+    input.addEventListener("change", function () {
+      if (!input.checked) return;
+      setBuilderAxis(input.getAttribute("data-axis"), input.value);
+    });
+    input.closest(".axis-option").addEventListener("click", function (event) {
+      if (event.detail > 0) setTimeout(closeAndFocus, 0);
+    });
+    input.addEventListener("keydown", function (event) {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      input.click();
+      closeAndFocus();
+    });
+    input.addEventListener("keyup", function (event) {
+      if (event.key === " ") closeAndFocus();
+    });
+  });
+  Array.prototype.forEach.call($("builder").querySelectorAll(".axis-dropdown"), function (dropdown) {
+    dropdown.addEventListener("toggle", function () {
+      if (!dropdown.open) return;
+      Array.prototype.forEach.call($("builder").querySelectorAll(".axis-dropdown[open]"), function (other) {
+        if (other !== dropdown) other.open = false;
+      });
+    });
+  });
+  syncBuilder();
+}
+
+function syncBuilder() {
+  BUILD_AXES.forEach(function (axis) {
+    var dropdown = $("builder").querySelector(".axis-dropdown[data-axis='" + axis.id + "']");
+    Array.prototype.forEach.call(document.getElementsByName("build-" + axis.id), function (input) {
+      input.checked = input.value === builderState[axis.id];
+    });
+    var selected = moduleFor(axis.id, builderState[axis.id]);
+    $("axisCurrent-" + axis.id).textContent = selected.nm;
+    $("axisSubtitle-" + axis.id).innerHTML = "<strong>" + esc(axis.q) + "</strong> " + esc(selected.note);
+  });
+}
+
+function nearestRecipes(recipe) {
+  return METHODS.map(function (method) {
+    var differences = AXIS_IDS.filter(function (axis) {
+      return RECIPES[method.id][axis] !== recipe[axis];
+    });
+    return { method: method, distance: differences.length, differences: differences };
+  }).sort(function (a, b) {
+    return a.distance - b.distance || a.method.i - b.method.i;
+  });
+}
+
+function makeCustomMethod() {
+  var credit = moduleFor("credit", builderState.credit);
+  var update = moduleFor("update", builderState.update);
+  var reduction = moduleFor("reduction", builderState.reduction);
+  var data = moduleFor("data", builderState.data);
+  var regression = credit.id === "offline_astar";
+  var nearest = nearestRecipes(builderState);
+  var bestDistance = nearest[0].distance;
+  var closest = nearest.filter(function (item) { return item.distance === bestDistance; }).slice(0, 3);
+  var closestNames = closest.map(function (item) { return item.method.nm; }).join(", ");
+  var obj = [A(credit.nm, 1), P("+"), W(update.nm, 1), P("+"),
+             S(reduction.nm, "agg", 1), P("+"), S(data.nm, "samples", 1)];
+  var grad = regression
+    ? [P("Regression chassis selected. The exact target is undefined until these modules are made compatible.")]
+    : [P("Shared direction:"), G(GLOGPI, 1), P(". The exact loss is undefined until these modules are made compatible.")];
+
+  return {
+    id: "custom",
+    nm: "Custom combination",
+    full: "No named method on this page uses these four choices.",
+    parents: [], changed: [], obj: obj, grad: grad,
+    def: [P("This is a comparison aid, not a paper objective or a guaranteed trainable algorithm.")],
+    outer: { samples: data.nm, reuse: data.note },
+    fix: "This is a hypothetical combination, not a named recipe in this guide. Some cross-combinations need extra definitions before they form a trainable loss. Closest here: <b>" + esc(closestNames) + "</b> (" + bestDistance + " decision" + (bestDistance === 1 ? "" : "s") + " away).",
+    subfix: BUILD_AXES.map(function (axis) {
+      var option = moduleFor(axis.id, builderState[axis.id]);
+      return [axis.nm, option.nm + ": " + option.note];
+    }),
+    n: {
+      adv: credit.note,
+      w: update.note,
+      sel: reduction.note + " " + data.note,
+      sel_samples: data.note,
+      sel_agg: reduction.note,
+      sel_reuse: data.note,
+      score: regression
+        ? "This custom build replaces the score-function direction with least-squares log-ratio regression."
+        : "The REINFORCE score function is unchanged; the other three factors decide what multiplies it and how those terms are combined."
+    }
+  };
+}
+
+function announceBuild(matchId) {
+  $("buildAnnouncement").textContent = matchId
+    ? "Matches " + BY[matchId].nm
+    : "Custom combination, no named method uses this recipe";
+}
+
+function setBuilderAxis(axis, value) {
+  if (!moduleFor(axis, value)) return;
+  builderState[axis] = value;
+  resolveBuilder();
+}
+
+function resolveBuilder() {
+  var matchId = RECIPE_BY_SIGNATURE[recipeSignature(builderState)];
+  if (matchId) {
+    select(matchId);
+    return;
+  }
+  customMode = true;
+  customMethod = makeCustomMethod();
+  curKnob = null;
+  curFacet = null;
+  syncBuilder();
+  announceBuild(null);
+  renderCanvas();
+  paintGraph();
+  if (history.replaceState) {
+    history.replaceState(null, "", "#build=" + recipeSignature(builderState).replace(/\|/g, ","));
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ *  render: genealogy graph
+ * ------------------------------------------------------------------ */
+function edgePath(a, b) {
+  var wa = nodeW(a), dy = b.gy - a.gy, dx = b.gx - a.gx;
+  var dir = dx >= 0 ? 1 : -1;
+
+  if (dy > 40) {
+    if (Math.abs(dx) > 180) {                 /* wide: leave sideways, then drop */
+      var sx = a.gx + dir * wa / 2, sy = a.gy, ex = b.gx, ey = b.gy - NH / 2;
+      var d = Math.max(44, (ey - sy) * 0.45);
+      return "M" + sx + " " + sy + " C " + (sx + dir * 62) + " " + sy
+           + ", " + ex + " " + (ey - d) + ", " + ex + " " + ey;
+    }
+    var x1 = a.gx, y1 = a.gy + NH / 2, x2 = b.gx, y2 = b.gy - NH / 2;
+    var dd = Math.max(28, (y2 - y1) * 0.5);
+    return "M" + x1 + " " + y1 + " C " + x1 + " " + (y1 + dd)
+         + ", " + x2 + " " + (y2 - dd) + ", " + x2 + " " + y2;
+  }
+
+  if (Math.abs(dy) <= 40) {                   /* same row: arc over the top */
+    var s = a.gy - NH / 2, mx = (a.gx + b.gx) / 2;
+    return "M" + a.gx + " " + s + " Q " + mx + " " + (s - 62) + ", " + b.gx + " " + (b.gy - NH / 2);
+  }
+
+  var ux1 = a.gx + dir * wa / 2, uy1 = a.gy - NH / 2;   /* upward: climb early */
+  var ux2 = b.gx, uy2 = b.gy + NH / 2;
+  var ud = Math.max(44, Math.abs(uy1 - uy2) * 0.5);
+  return "M" + ux1 + " " + uy1 + " C " + (ux1 + dir * Math.min(80, ud)) + " " + (uy1 - 60)
+       + ", " + ux2 + " " + (uy2 + ud) + ", " + ux2 + " " + uy2;
+}
+
+function renderGraph() {
+  var s = "<svg viewBox='45 26 1140 756' role='img' aria-label='Genealogy of policy gradient methods'>";
+  s += "<defs>";
+  ["adv", "w", "sel"].forEach(function (k) {
+    s += "<marker id='ar-" + k + "' viewBox='0 0 10 10' refX='9' refY='5' markerWidth='6' markerHeight='6' orient='auto-start-reverse'>"
+      + "<path d='M0 1 L9 5 L0 9 z'/></marker>";
+  });
+  s += "</defs>";
+
+  BANDS.forEach(function (b) {
+    s += "<rect class='band' x='52' y='" + b.y + "' width='1126' height='" + b.h + "'/>";
+    s += "<text class='bandlbl' x='64' y='" + (b.y + 17) + "'>" + b.t + "</text>";
+  });
+
+  EDGES.forEach(function (e, i) {
+    var a = BY[e.a], b = BY[e.b], d = edgePath(a, b);
+    s += "<path class='edge" + (e.dash ? " dash" : "") + "' data-k='" + e.k + "' data-i='" + i + "' d='" + d + "' marker-end='url(#ar-" + e.k + ")'/>";
+    s += "<path class='ehit' data-i='" + i + "' d='" + d + "'/>";
+  });
+
+  METHODS.forEach(function (m) {
+    var w = nodeW(m);
+    s += "<g class='node' data-id='" + m.id + "' data-k='" + m.k + "' tabindex='0' role='button' aria-label='" + esc(m.nm) + "'>"
+      + "<rect x='" + (m.gx - w / 2) + "' y='" + (m.gy - NH / 2) + "' width='" + w + "' height='" + NH + "'/>"
+      + "<text x='" + m.gx + "' y='" + (m.gy + 1) + "'>" + esc(m.nm) + "</text></g>";
+  });
+
+  s += "</svg>";
+  $("graphScroll").innerHTML = s;
+
+  Array.prototype.forEach.call($("graphScroll").querySelectorAll(".node"), function (el) {
+    el.addEventListener("click", function () { select(el.getAttribute("data-id")); });
+    el.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); select(el.getAttribute("data-id")); }
+    });
+  });
+  Array.prototype.forEach.call($("graphScroll").querySelectorAll(".ehit"), function (el) {
+    var i = +el.getAttribute("data-i");
+    el.addEventListener("mouseenter", function () { hotEdge(i); });
+    el.addEventListener("mouseleave", function () { paintGraph(); });
+    el.addEventListener("click", function () { select(EDGES[i].b); });
+  });
+}
+
+function hotEdge(i) {
+  Array.prototype.forEach.call($("graphScroll").querySelectorAll(".edge"), function (el) {
+    var j = +el.getAttribute("data-i");
+    el.classList.toggle("hot", j === i);
+    el.classList.toggle("dim", j !== i);
+  });
+  var e = EDGES[i];
+  $("relTitle").textContent = "relation";
+  $("relList").innerHTML = relRow(e);
+  $("relList").scrollTop = 0;
+}
+
+function relRow(e) {
+  return "<div class='rel' data-k='" + e.k + "'><span class='arrow'>" + esc(BY[e.a].nm)
+    + " → " + esc(BY[e.b].nm) + "</span><span class='why'>" + esc(e.why) + "</span></div>";
+}
+
+function paintGraph() {
+  if (customMode) {
+    var nearest = nearestRecipes(builderState);
+    var distance = nearest[0].distance;
+    var closest = nearest.filter(function (item) { return item.distance === distance; }).slice(0, 3);
+    var closestIds = closest.map(function (item) { return item.method.id; });
+    Array.prototype.forEach.call($("graphScroll").querySelectorAll(".edge"), function (el) {
+      el.classList.remove("hot");
+      el.classList.add("dim");
+    });
+    Array.prototype.forEach.call($("graphScroll").querySelectorAll(".node"), function (el) {
+      var near = closestIds.indexOf(el.getAttribute("data-id")) >= 0;
+      el.classList.remove("on");
+      el.classList.toggle("near", near);
+      el.classList.toggle("dim", !near);
+    });
+    $("relTitle").textContent = "closest named recipes";
+    $("relList").innerHTML = closest.map(function (item) {
+      var labels = item.differences.map(function (axisId) {
+        return BUILD_AXES.filter(function (axis) { return axis.id === axisId; })[0].nm;
+      });
+      return "<div class='rel'><span class='arrow'>" + esc(item.method.nm) + "</span><span class='why'>change "
+        + esc(labels.join(" + ")) + "</span></div>";
+    }).join("");
+    $("relList").scrollTop = 0;
+    return;
+  }
+  var inc = [];
+  EDGES.forEach(function (e, i) { if (e.a === cur || e.b === cur) inc.push(i); });
+  Array.prototype.forEach.call($("graphScroll").querySelectorAll(".edge"), function (el) {
+    var j = +el.getAttribute("data-i");
+    el.classList.toggle("hot", inc.indexOf(j) >= 0);
+    el.classList.toggle("dim", inc.indexOf(j) < 0);
+  });
+  Array.prototype.forEach.call($("graphScroll").querySelectorAll(".node"), function (el) {
+    var id = el.getAttribute("data-id");
+    var touched = id === cur || EDGES.some(function (e, i) {
+      return inc.indexOf(i) >= 0 && (e.a === id || e.b === id);
+    });
+    el.classList.toggle("on", id === cur);
+    el.classList.remove("near");
+    el.classList.toggle("dim", !touched);
+  });
+  $("relTitle").textContent = "how " + BY[cur].nm + " connects";
+  $("relList").innerHTML = inc.length
+    ? inc.map(function (i) { return relRow(EDGES[i]); }).join("")
+    : "<div class='rel'><span class='arrow'>root</span><span class='why'>everything on this page descends from here</span></div>";
+  $("relList").scrollTop = 0;
+}
+
+/* ------------------------------------------------------------------ *
+ *  seed equation
+ * ------------------------------------------------------------------ */
+function renderSeed() {
+  var toks = [
+    P("g ="), A("R(y)"), S(SUM + "<sub>t=1</sub><sup>|y|</sup>", "agg"), G(GLOGY),
+    P("&nbsp;&nbsp;&nbsp;with&nbsp;"), A("R(y) " + IN + " {0, 1}")
+  ];
+  $("seedEq").innerHTML = eqHTML(toks, true);
+}
+
+/* ------------------------------------------------------------------ *
+ *  selection + wiring
+ * ------------------------------------------------------------------ */
+function select(id, keepKnob) {
+  if (!BY[id]) return;
+  cur = id;
+  customMode = false;
+  customMethod = null;
+  builderState = copyRecipe(RECIPES[id]);
+  if (!keepKnob) { curKnob = null; curFacet = null; }
+  syncBuilder();
+  announceBuild(id);
+  renderCanvas();
+  paintGraph();
+  if (history.replaceState) history.replaceState(null, "", "#" + cur);
+}
+
+renderSeed();
+renderKnobs();
+renderAxisGuide();
+renderBuilder();
+renderGraph();
+
+$("ghostBtn").addEventListener("click", function () {
+  showGhost = !showGhost;
+  renderCanvas();
+});
+
+document.addEventListener("click", function (event) {
+  if (event.target.closest && event.target.closest(".axis-dropdown")) return;
+  Array.prototype.forEach.call(document.querySelectorAll(".axis-dropdown[open]"), function (dropdown) {
+    dropdown.open = false;
+  });
+});
+
+document.addEventListener("keydown", function (event) {
+  if (event.key !== "Escape") return;
+  var openDropdown = document.querySelector(".axis-dropdown[open]");
+  if (!openDropdown) return;
+  openDropdown.open = false;
+  openDropdown.querySelector(".axis-trigger").focus();
+});
+
+var hash = (location.hash || "").replace("#", "");
+if (BY[hash]) {
+  select(hash);
+} else if (hash.indexOf("build=") === 0) {
+  var parts = hash.slice(6).split(",");
+  var validBuild = parts.length === AXIS_IDS.length;
+  var parsed = {};
+  AXIS_IDS.forEach(function (axis, i) {
+    parsed[axis] = parts[i];
+    if (!moduleFor(axis, parts[i])) validBuild = false;
+  });
+  if (validBuild) {
+    builderState = parsed;
+    resolveBuilder();
+  } else select("grpo");
+} else select("grpo");
+
+})();
+</script>
+</body>
+</html>

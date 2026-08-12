@@ -9,7 +9,7 @@
 <body>
 <div class="wrap">
 
-  <div class="eyebrow">An online learning game / you are the adversary</div>
+  <div class="eyebrow">RLRS Week 1 / You are the adversary</div>
   <h1>Beat the learner. <em>One of them is easy.</em></h1>
   <p class="premise">
     Two algorithms split their bets between expert A and expert B.
@@ -100,7 +100,7 @@
 
   <div class="explain">
     <h2>Why one is farmable and the other isn't</h2>
-    <p><b>FTL is exploitable because its argmin is a hard commitment.</b> It always stands entirely on yesterday's winner, so you collect 1.0 from it every round just by reading its position. Meanwhile your strikes alternate sides, the totals L<sub>A</sub> and L<sub>B</sub> stay within 1 of each other, and the best fixed expert only pays about half the rounds. So FTL's regret grows like t/2. Linear. That slope is the dotted line in the chart, and after ten rounds of auto-exploit your red curve is sitting on it.</p>
+    <p><b>FTL is exploitable because its argmin is a hard commitment.</b> It always stands entirely on yesterday's winner, so you collect 1.0 from it every round just by reading its position. Meanwhile your strikes alternate sides, the totals L<sub>A</sub> and L<sub>B</sub> stay within 1 of each other, and the best fixed expert only pays about half the rounds. So FTL's regret grows like t/2. Linear. That slope is the dotted line in the chart, and after ten rounds of auto-exploit the FTL curve is sitting on it.</p>
     <p><b>FTRL is boring on purpose.</b> The entropy regularizer turns the hard argmin into a softmax, so near-tied totals mean a near-uniform split. There is no committed mass for you to punish. Whatever you strike, it pays roughly its probability on that expert, about 0.5, which is exactly what the benchmark pays. Nothing to farm.</p>
     <p><b>Now raise eta and try again.</b> High temperature makes FTRL lean hard toward the current leader. It starts to resemble FTL, and its allocation bar begins whipping side to side under your strikes. That is the regret trade-off R(u)/eta + eta*sum||l||^2 made physical: responsiveness is exploitability. Also try the random-loss button on a fresh run. FTL is basically fine against noise. Its pathology needs an opponent who conditions on the commitment. Stability is not about surviving randomness; it is about not being predictable and all in at the same time.</p>
     <details>
@@ -184,6 +184,12 @@
   function renderChart(s) {
     var t = hist.length;
     var W = 720, H = 240, L = 44, R = 14, T = 14, B = 28;
+    var css = getComputedStyle(document.documentElement);
+    var chartGrid = css.getPropertyValue("--chart-grid").trim();
+    var chartMuted = css.getPropertyValue("--ink-3").trim();
+    var chartAxis = css.getPropertyValue("--line-strong").trim();
+    var chartFtrl = css.getPropertyValue("--ftrl").trim();
+    var chartFtl = css.getPropertyValue("--ftl").trim();
     var xmax = Math.max(20, Math.ceil(t / 10) * 10);
     var ymaxData = Math.max.apply(null, s.ftlSeries.concat(s.ftrlSeries, [4]));
     var ymax = Math.ceil(ymaxData + 1);
@@ -198,7 +204,7 @@
     var ySteps = 4;
     for (var k = 0; k <= ySteps; k++) {
       var yv = (ymax / ySteps) * k;
-      g += '<line x1="' + L + '" y1="' + fmt(Y(yv),1) + '" x2="' + (W - R) + '" y2="' + fmt(Y(yv),1) + '" stroke="#EAECE8" stroke-width="1"/>';
+      g += '<line x1="' + L + '" y1="' + fmt(Y(yv),1) + '" x2="' + (W - R) + '" y2="' + fmt(Y(yv),1) + '" stroke="' + chartGrid + '" stroke-width="1"/>';
       g += '<text x="' + (L - 7) + '" y="' + fmt(Y(yv) + 4,1) + '" text-anchor="end">' + fmt(yv, yv % 1 ? 1 : 0) + '</text>';
     }
     for (var k2 = 0; k2 <= 4; k2++) {
@@ -206,10 +212,10 @@
       g += '<text x="' + fmt(X(xv),1) + '" y="' + (H - 8) + '" text-anchor="middle">' + xv + '</text>';
     }
     var refEndX = Math.min(xmax, 2 * ymax);
-    g += '<line x1="' + fmt(X(0),1) + '" y1="' + fmt(Y(0),1) + '" x2="' + fmt(X(refEndX),1) + '" y2="' + fmt(Y(refEndX / 2),1) + '" stroke="#8A9096" stroke-width="1.5" stroke-dasharray="2 5"/>';
-    g += '<line x1="' + L + '" y1="' + fmt(Y(0),1) + '" x2="' + (W - R) + '" y2="' + fmt(Y(0),1) + '" stroke="#B9BEB8" stroke-width="1"/>';
-    g += '<polyline fill="none" stroke="#2E5FA3" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round" points="' + pts(s.ftrlSeries) + '"/>';
-    g += '<polyline fill="none" stroke="#C6373C" stroke-width="2.5" stroke-linejoin="round" points="' + pts(s.ftlSeries) + '"/>';
+    g += '<line x1="' + fmt(X(0),1) + '" y1="' + fmt(Y(0),1) + '" x2="' + fmt(X(refEndX),1) + '" y2="' + fmt(Y(refEndX / 2),1) + '" stroke="' + chartMuted + '" stroke-width="1.5" stroke-dasharray="2 5"/>';
+    g += '<line x1="' + L + '" y1="' + fmt(Y(0),1) + '" x2="' + (W - R) + '" y2="' + fmt(Y(0),1) + '" stroke="' + chartAxis + '" stroke-width="1"/>';
+    g += '<polyline fill="none" stroke="' + chartFtrl + '" stroke-width="2.5" stroke-dasharray="7 5" stroke-linejoin="round" points="' + pts(s.ftrlSeries) + '"/>';
+    g += '<polyline fill="none" stroke="' + chartFtl + '" stroke-width="2.5" stroke-linejoin="round" points="' + pts(s.ftlSeries) + '"/>';
     $("chart").innerHTML = g;
   }
 
