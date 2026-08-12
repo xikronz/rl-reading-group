@@ -91,7 +91,7 @@ const SCHEDULE = [
     presenter: "Andreas Pasternak",
     materials: {
       names: ["Slides ·","Jax notes ·","Scaling RL for LLMs"],
-      links: ["docs/slides/week_4_doordash.pdf",
+      links: ["slides/week_4_doordash.pdf",
         "https://johnwlambert.github.io/jax-tutorial/",
         "https://arxiv.org/pdf/2510.13786"]
      
@@ -106,8 +106,8 @@ const SCHEDULE = [
     presenter: "Carrie Chen",
     materials: {
       names: ["Slides ·", "Demo ·", "Reinforce for LLMs"],
-      links: ["docs/slides/week_45_pg.pdf",
-        "https://github.com/xikronz/rl-reading-group/tree/main/demos/week_4.5_pg", 
+      links: ["slides/week_45_pg.pdf",
+        "https://github.com/xikronz/rl-reading-group/tree/main/demos/week_45_pg", 
         "https://arxiv.org/pdf/2402.03300"]
     },
   },
