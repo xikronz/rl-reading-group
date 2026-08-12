@@ -106,7 +106,7 @@ const SCHEDULE = [
     presenter: "Carrie Chen",
     materials: {
       names: ["Slides ·", "Demo ·", "Reinforce for LLMs"],
-      links: ["docs/slides/week_4.5_pg.pdf",
+      links: ["docs/slides/week_45_pg.pdf",
         "https://github.com/xikronz/rl-reading-group/tree/main/demos/week_4.5_pg", 
         "https://arxiv.org/pdf/2402.03300"]
     },
