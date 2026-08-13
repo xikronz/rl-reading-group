@@ -19,7 +19,7 @@
 const NEWS = [
   {
     date: "Aug 1, 2026",
-    text: "Cornell RLRS is officially partnering with Verda AI, whose A100 compute powers the research track of our seminar 🚀",
+    text: "Cornell RLRS is officially partnering with Verda AI, whose A100 compute will power the research track of our seminar 🚀",
   },
   {
     date: "Jul 11, 2026",
@@ -115,10 +115,12 @@ const SCHEDULE = [
     {
     date: "Aug 15, 2026",
     topic: "RL in Industry #3: Patronus AI",
-    paper: "TBD",
+    paper: "Building Generative Simulators for AGI",
     paperUrl: "TBD",
     presenter: "Darshan Deshpande",
     materials: {
+      names: ["Slides  ·", "Demo  ·", "RL Environments"], 
+      links: ["x", "x", "https://huggingface.co/spaces/AdithyaSK/rl-environments-guide"]
      },
   },
 
@@ -127,8 +129,9 @@ const SCHEDULE = [
     topic: "RL in Industry #4: Applied Compute",
     paper: "Predicting and Controlling Staleness in Async RL",
     paperUrl: "https://www.appliedcompute.com/research/staleness-in-fully-async-rl",
-    presenter: "Chengyu Dong",
-    materials: {
+    presenter: "Chengyu Dong", 
+    materials: { names: ["Slides ·", "M2PO ·", "Staleflow "],
+      links: ["x", "https://infini-ai-lab.github.io/M2PO/", "https://arxiv.org/pdf/2601.12784"]
      },
   },
 
